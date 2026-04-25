@@ -4,3 +4,4 @@
 [2026-04-24 14:05:00] domain: add User entity and UserRole enum
 [2026-04-24 16:47:00] frontend: init Angular project, setup tailwind
 [2026-04-24 17:22:00] frontend: add base routing and app shell
+[2026-04-25 09:40:00] domain: add Course, Module, Activity entities
