@@ -6,3 +6,4 @@
 [2026-04-24 17:22:00] frontend: add base routing and app shell
 [2026-04-25 09:40:00] domain: add Course, Module, Activity entities
 [2026-04-25 11:15:00] domain: add Team, TeamMember, TaskItem entities
+[2026-04-25 13:50:00] frontend: login page component and form
