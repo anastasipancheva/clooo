@@ -10,3 +10,4 @@
 [2026-04-25 15:30:00] frontend: register page, auth service stub
 [2026-04-28 10:00:00] infra: EF Core setup, ScoreHubDbContext
 [2026-04-28 12:20:00] infra: JWT service implementation
+[2026-04-28 14:45:00] frontend: HTTP interceptor for JWT bearer token
