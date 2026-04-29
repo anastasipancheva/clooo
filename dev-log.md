@@ -15,3 +15,4 @@
 [2026-04-29 09:25:00] api: AuthController - register/login endpoints
 [2026-04-29 11:40:00] infra: password hashing with BCrypt
 [2026-04-29 14:00:00] frontend: dashboard page skeleton
+[2026-04-29 16:30:00] frontend: models.ts - TypeScript interfaces for API
