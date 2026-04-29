@@ -14,3 +14,4 @@
 [2026-04-28 16:10:00] frontend: auth guard, route protection
 [2026-04-29 09:25:00] api: AuthController - register/login endpoints
 [2026-04-29 11:40:00] infra: password hashing with BCrypt
+[2026-04-29 14:00:00] frontend: dashboard page skeleton
