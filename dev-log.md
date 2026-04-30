@@ -18,3 +18,4 @@
 [2026-04-29 16:30:00] frontend: models.ts - TypeScript interfaces for API
 [2026-04-30 10:35:00] infra: initial EF migration, database seed
 [2026-04-30 13:15:00] api: Program.cs - DI, JWT middleware, CORS
+[2026-04-30 15:50:00] frontend: api.service.ts base HTTP layer
