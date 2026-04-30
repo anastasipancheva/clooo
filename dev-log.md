@@ -16,3 +16,4 @@
 [2026-04-29 11:40:00] infra: password hashing with BCrypt
 [2026-04-29 14:00:00] frontend: dashboard page skeleton
 [2026-04-29 16:30:00] frontend: models.ts - TypeScript interfaces for API
+[2026-04-30 10:35:00] infra: initial EF migration, database seed
