@@ -19,3 +19,4 @@
 [2026-04-30 10:35:00] infra: initial EF migration, database seed
 [2026-04-30 13:15:00] api: Program.cs - DI, JWT middleware, CORS
 [2026-04-30 15:50:00] frontend: api.service.ts base HTTP layer
+[2026-05-04 09:10:00] domain: add AssistantApplication, TaskSubmission
