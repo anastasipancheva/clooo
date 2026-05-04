@@ -22,3 +22,4 @@
 [2026-05-04 09:10:00] domain: add AssistantApplication, TaskSubmission
 [2026-05-04 11:45:00] infra: AddFullDomainModel migration
 [2026-05-04 14:20:00] frontend: courses list page
+[2026-05-04 16:55:00] frontend: course card component, enroll button
