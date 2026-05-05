@@ -26,3 +26,4 @@
 [2026-05-05 10:05:00] api: CoursesController - CRUD courses
 [2026-05-05 12:30:00] infra: AddActivityStatusAndAssistantApps migration
 [2026-05-05 15:00:00] frontend: lecture-detail page - task list
+[2026-05-05 17:20:00] frontend: notifications page and bell icon
