@@ -89,7 +89,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
               )}
             </Link>
             <div className="h-5 w-px bg-[#E5E7EB]" />
-            <span className="text-sm text-[#1A1A1B] font-medium">{user?.displayName}</span>
+            <Link href="/profile" className="text-sm text-[#1A1A1B] font-medium hover:text-[#005BFF] transition-colors">{user?.displayName}</Link>
             <button
               onClick={handleLogout}
               className="flex items-center justify-center w-8 h-8 rounded-lg text-[#6B7280] hover:text-[#EF4444] hover:bg-red-50 transition-colors"

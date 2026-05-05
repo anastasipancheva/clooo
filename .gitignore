@@ -1,0 +1,25 @@
+# Build output
+**/bin/
+**/obj/
+
+# SQLite DB files (dev only)
+*.db
+*.db-shm
+*.db-wal
+
+# .NET user files
+*.user
+*.suo
+.vs/
+
+# Node / Next.js
+node_modules/
+.next/
+frontend/.next/
+
+# Claude worktrees
+.claude/worktrees/
+
+# OS
+.DS_Store
+Thumbs.db

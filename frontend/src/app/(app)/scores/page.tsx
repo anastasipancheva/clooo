@@ -1,15 +1,30 @@
 "use client";
 import { useEffect, useState } from "react";
-import { courses, Course, StudentScore } from "@/lib/api";
+import { courses, Course, StudentScore, studentApi } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 
 export default function ScoresPage() {
   const { user } = useAuth();
   const [courseList, setCourseList] = useState<Course[]>([]);
+  const [, setEnrolledIds] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<string | null>(null);
   const [score, setScore] = useState<StudentScore | null>(null);
 
-  useEffect(() => { courses.list().then(setCourseList).catch(() => {}); }, []);
+  useEffect(() => {
+    // Load all courses + enrolled activities to determine which courses I'm in
+    Promise.all([
+      courses.list(),
+      studentApi.myActivities(),
+    ]).then(([allCourses, acts]) => {
+      // Derive enrolled course codes from activities
+      const myCodes = new Set(acts.map(a => a.courseCode));
+      const myIds = new Set(allCourses.filter(c => myCodes.has(c.code)).map(c => c.id));
+      setEnrolledIds(myIds);
+      setCourseList(allCourses.filter(c => myIds.has(c.id)));
+    }).catch(() => courses.list().then(setCourseList));
+  }, []);
 
   useEffect(() => {
     if (!selected || !user) return;
@@ -34,7 +49,14 @@ export default function ScoresPage() {
       <div className="bg-white rounded-xl border border-[#E5E7EB] p-4">
         <p className="text-xs font-medium text-[#6B7280] mb-3 uppercase tracking-wide">Выберите курс</p>
         <div className="flex flex-wrap gap-2">
-          {courseList.length === 0 && <p className="text-sm text-[#9CA3AF]">Нет доступных курсов</p>}
+          {courseList.length === 0 && (
+        <div className="text-sm text-[#9CA3AF]">
+          Вы не записаны ни на один курс.{" "}
+          <Link href="/courses" className="text-[#005BFF] hover:underline inline-flex items-center gap-1">
+            Перейти к курсам <ChevronRight size={12} />
+          </Link>
+        </div>
+      )}
           {courseList.map((c) => (
             <button
               key={c.id}

@@ -48,19 +48,20 @@ export default function KtStudentPage({ params }: PageProps) {
   const [tasks, setTasks] = useState<TaskState[]>([]);
 
   const reload = useCallback(async () => {
-    const slots: KtSlot[] = await ktApi.myQueue(activityId).catch(() => []);
+    // getAllTasks shows every task for this KT, even before student enters queue
+    const slots = await ktApi.getAllTasks(activityId).catch(() => [] as KtSlot[]);
     setTasks(prev => {
-      // Merge server state with local URL edits
       const map = new Map(prev.map(t => [t.taskItemId, t]));
       return slots.map(s => {
         const existing = map.get(s.taskItemId);
+        const serverUrl = (s as KtSlot & { solutionUrl?: string }).solutionUrl ?? "";
         return {
           taskItemId: s.taskItemId,
           taskCode: s.taskCode,
           status: s.status,
           queuePosition: s.queuePosition,
-          solutionUrl: existing?.urlDirty ? existing.solutionUrl : (existing?.savedUrl ?? ""),
-          savedUrl: existing?.savedUrl ?? "",
+          solutionUrl: existing?.urlDirty ? existing.solutionUrl : serverUrl,
+          savedUrl: serverUrl,
           urlDirty: existing?.urlDirty ?? false,
           savingUrl: existing?.savingUrl ?? false,
           toggling: false,

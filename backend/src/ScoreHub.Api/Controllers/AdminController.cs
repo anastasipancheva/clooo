@@ -7,10 +7,10 @@ using ScoreHub.Infrastructure.Persistence;
 
 namespace ScoreHub.Api.Controllers;
 
-/// <summary>Администрирование пользователей (только роль Admin).</summary>
+/// <summary>Администрирование пользователей (роли Teacher и Admin).</summary>
 [ApiController]
 [Route("api/admin")]
-[Authorize(Roles = AppRoles.Admin)]
+[Authorize(Roles = $"{AppRoles.Teacher},{AppRoles.Admin}")]
 public sealed class AdminController : ControllerBase
 {
     private readonly ScoreHubDbContext _db;
@@ -22,6 +22,7 @@ public sealed class AdminController : ControllerBase
 
     /// <summary>Список всех пользователей (id, email, displayName, role).</summary>
     [HttpGet("users")]
+    [Authorize(Roles = $"{AppRoles.Teacher},{AppRoles.Admin}")]
     public async Task<IActionResult> ListUsers(CancellationToken ct)
     {
         var users = await _db.Users

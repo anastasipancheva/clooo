@@ -57,7 +57,7 @@ public sealed class CoursesController : ControllerBase
                 u.Id,
                 u.Email,
                 u.DisplayName,
-                u.Role,
+                Role = u.Role.ToString(),
                 e.EnrolledAt
             })
             .ToListAsync(ct);
