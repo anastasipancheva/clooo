@@ -29,3 +29,4 @@
 [2026-05-05 17:20:00] frontend: notifications page and bell icon
 [2026-05-06 09:50:00] api: TeamManagementController - CRUD teams
 [2026-05-06 12:00:00] infra: TeachingSetupService - create activities
+[2026-05-06 14:35:00] frontend: toast notifications service
