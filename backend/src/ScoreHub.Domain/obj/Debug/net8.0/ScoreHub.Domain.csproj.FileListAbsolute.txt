@@ -1,0 +1,23 @@
+C:\Users\salok\OneDrive\Рабочий стол\scorehub\src\ScoreHub.Domain\bin\Debug\net8.0\ScoreHub.Domain.deps.json
+C:\Users\salok\OneDrive\Рабочий стол\scorehub\src\ScoreHub.Domain\bin\Debug\net8.0\ScoreHub.Domain.dll
+C:\Users\salok\OneDrive\Рабочий стол\scorehub\src\ScoreHub.Domain\bin\Debug\net8.0\ScoreHub.Domain.pdb
+C:\Users\salok\OneDrive\Рабочий стол\scorehub\src\ScoreHub.Domain\obj\Debug\net8.0\ScoreHub.Domain.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\salok\OneDrive\Рабочий стол\scorehub\src\ScoreHub.Domain\obj\Debug\net8.0\ScoreHub.Domain.AssemblyInfoInputs.cache
+C:\Users\salok\OneDrive\Рабочий стол\scorehub\src\ScoreHub.Domain\obj\Debug\net8.0\ScoreHub.Domain.AssemblyInfo.cs
+C:\Users\salok\OneDrive\Рабочий стол\scorehub\src\ScoreHub.Domain\obj\Debug\net8.0\ScoreHub.Domain.csproj.CoreCompileInputs.cache
+C:\Users\salok\OneDrive\Рабочий стол\scorehub\src\ScoreHub.Domain\obj\Debug\net8.0\ScoreHub.Domain.dll
+C:\Users\salok\OneDrive\Рабочий стол\scorehub\src\ScoreHub.Domain\obj\Debug\net8.0\refint\ScoreHub.Domain.dll
+C:\Users\salok\OneDrive\Рабочий стол\scorehub\src\ScoreHub.Domain\obj\Debug\net8.0\ScoreHub.Domain.pdb
+C:\Users\salok\OneDrive\Рабочий стол\scorehub\src\ScoreHub.Domain\obj\Debug\net8.0\ref\ScoreHub.Domain.dll
+C:\Users\salok\OneDrive\Рабочий стол\scorehub\src\ScoreHub.Domain\obj\Debug\net8.0\ScoreHub.Domain.sourcelink.json
+C:\Users\User\Desktop\ScoreHub_Projec\backend\src\ScoreHub.Domain\bin\Debug\net8.0\ScoreHub.Domain.deps.json
+C:\Users\User\Desktop\ScoreHub_Projec\backend\src\ScoreHub.Domain\bin\Debug\net8.0\ScoreHub.Domain.dll
+C:\Users\User\Desktop\ScoreHub_Projec\backend\src\ScoreHub.Domain\bin\Debug\net8.0\ScoreHub.Domain.pdb
+C:\Users\User\Desktop\ScoreHub_Projec\backend\src\ScoreHub.Domain\obj\Debug\net8.0\ScoreHub.Domain.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\User\Desktop\ScoreHub_Projec\backend\src\ScoreHub.Domain\obj\Debug\net8.0\ScoreHub.Domain.AssemblyInfoInputs.cache
+C:\Users\User\Desktop\ScoreHub_Projec\backend\src\ScoreHub.Domain\obj\Debug\net8.0\ScoreHub.Domain.AssemblyInfo.cs
+C:\Users\User\Desktop\ScoreHub_Projec\backend\src\ScoreHub.Domain\obj\Debug\net8.0\ScoreHub.Domain.csproj.CoreCompileInputs.cache
+C:\Users\User\Desktop\ScoreHub_Projec\backend\src\ScoreHub.Domain\obj\Debug\net8.0\ScoreHub.Domain.dll
+C:\Users\User\Desktop\ScoreHub_Projec\backend\src\ScoreHub.Domain\obj\Debug\net8.0\refint\ScoreHub.Domain.dll
+C:\Users\User\Desktop\ScoreHub_Projec\backend\src\ScoreHub.Domain\obj\Debug\net8.0\ScoreHub.Domain.pdb
+C:\Users\User\Desktop\ScoreHub_Projec\backend\src\ScoreHub.Domain\obj\Debug\net8.0\ref\ScoreHub.Domain.dll

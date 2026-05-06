@@ -1,0 +1,6 @@
+@ScoreHub.Api_HostAddress = http://localhost:5145
+
+GET {{ScoreHub.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

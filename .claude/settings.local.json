@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build *)",
+      "Bash(dotnet ef *)",
+      "PowerShell(Unblock-File -Path \"C:\\\\Users\\\\User\\\\Desktop\\\\ScoreHub_Projec\\\\backend\\\\.config\\\\dotnet-tools.json\")",
+      "Bash(dotnet tool *)",
+      "Bash(dotnet add *)",
+      "Bash(dotnet restore *)",
+      "Bash(dotnet remove *)",
+      "Bash(npx --yes create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-git)",
+      "Bash(npm install *)",
+      "Bash(npx shadcn@latest init --yes --defaults)",
+      "Bash(npx shadcn@latest add button badge card input label toast separator --yes)",
+      "Bash(npx shadcn@latest add sonner --yes)",
+      "Bash(npm run *)",
+      "Bash(npx shadcn@latest add button --yes)",
+      "Bash(npx shadcn@latest add card badge input label separator --yes)",
+      "Bash(npx shadcn@latest add select --yes)",
+      "Bash(dotnet run *)",
+      "Bash(curl -s http://localhost:5062/health)",
+      "Bash(curl -s http://localhost:5062/api/auth/me)",
+      "Bash(curl -s -X POST http://localhost:5145/api/auth/register -H 'Content-Type: application/json' -d '{\"email\":\"admin@test.com\",\"password\":\"Admin1234\",\"displayName\":\"Admin User\"}')",
+      "Bash(python -m json.tool)",
+      "Bash(kill %1)",
+      "Bash(pkill -f \"ScoreHub.Api\")",
+      "Bash(curl -s -X POST http://localhost:5062/api/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"admin@test.com\",\"password\":\"Admin1234\"}')",
+      "Bash(curl -s -X POST http://localhost:5062/api/auth/register -H 'Content-Type: application/json' -d '{\"email\":\"assistant@test.com\",\"password\":\"Assist1234\",\"displayName\":\"Ассистент Иванов\"}')",
+      "Bash(curl -s -X POST http://localhost:5062/api/auth/register -H 'Content-Type: application/json' -d '{\"email\":\"teacher@test.com\",\"password\":\"Teacher1234\",\"displayName\":\"Преподаватель Петров\"}')",
+      "Bash(curl -s -X POST http://localhost:5062/api/auth/register -H 'Content-Type: application/json' -d '{\"Email\":\"assistant@test.com\",\"Password\":\"Assist1234\",\"DisplayName\":\"Ассистент Иванов\"}')",
+      "Bash(curl -s -X POST http://localhost:5062/api/auth/register -H 'Content-Type: application/json' -d '{\"Email\":\"teacher@test.com\",\"Password\":\"Teacher1234\",\"DisplayName\":\"Преподаватель Петров\"}')",
+      "Bash(curl -s -X POST http://localhost:5062/api/auth/register -H 'Content-Type: application/json; charset=utf-8' -d '{\"email\":\"assistant@test.com\",\"password\":\"Assist1234\",\"displayName\":\"Assistant Ivanov\"}')",
+      "Bash(curl -s -X POST http://localhost:5062/api/auth/register -H 'Content-Type: application/json; charset=utf-8' -d '{\"email\":\"teacher@test.com\",\"password\":\"Teacher1234\",\"displayName\":\"Teacher Petrov\"}')",
+      "Bash(sqlite3 scorehub.dev.db \"UPDATE Users SET Role = 2 WHERE Email = 'assistant@test.com';\")",
+      "Bash(sqlite3 scorehub.dev.db \"UPDATE Users SET Role = 3 WHERE Email = 'teacher@test.com';\")",
+      "Bash(sqlite3 scorehub.dev.db \"UPDATE Users SET Role = 4 WHERE Email = 'admin@test.com';\")",
+      "Bash(sqlite3 scorehub.dev.db \"SELECT Email, Role FROM Users;\")",
+      "Bash(curl -s -X POST http://localhost:5062/api/auth/dev/set-role -H 'Content-Type: application/json' -d '{\"email\":\"assistant@test.com\",\"role\":2}')",
+      "Bash(curl -s -X POST http://localhost:5062/api/auth/dev/set-role -H 'Content-Type: application/json' -d '{\"email\":\"teacher@test.com\",\"role\":3}')",
+      "Bash(curl -s -X POST http://localhost:5062/api/auth/dev/set-role -H 'Content-Type: application/json' -d '{\"email\":\"admin@test.com\",\"role\":4}')"
+    ]
+  }
+}

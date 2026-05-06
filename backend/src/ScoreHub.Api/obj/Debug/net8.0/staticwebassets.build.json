@@ -1,0 +1,11 @@
+{
+  "Version": 1,
+  "Hash": "eqvRXEVQGRVoZf+Q5GpxAYeZnU9Vt/Yd/5kzWSHGRdU=",
+  "Source": "ScoreHub.Api",
+  "BasePath": "_content/ScoreHub.Api",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": []
+}
