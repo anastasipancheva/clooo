@@ -31,3 +31,4 @@
 [2026-05-06 12:00:00] infra: TeachingSetupService - create activities
 [2026-05-06 14:35:00] frontend: toast notifications service
 [2026-05-07 10:25:00] api: TeachingController - lecture management
+[2026-05-07 13:40:00] infra: GroupActivityService - help queue logic
