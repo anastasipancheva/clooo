@@ -35,3 +35,4 @@
 [2026-05-07 16:15:00] frontend: assistant-session page - help requests
 [2026-05-08 09:30:00] api: AssistantSessionController - session flow
 [2026-05-08 11:55:00] infra: NotificationService - store notifications
+[2026-05-08 14:45:00] frontend: assistant-index page - active courses
