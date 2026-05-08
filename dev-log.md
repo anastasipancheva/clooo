@@ -33,3 +33,4 @@
 [2026-05-07 10:25:00] api: TeachingController - lecture management
 [2026-05-07 13:40:00] infra: GroupActivityService - help queue logic
 [2026-05-07 16:15:00] frontend: assistant-session page - help requests
+[2026-05-08 09:30:00] api: AssistantSessionController - session flow
