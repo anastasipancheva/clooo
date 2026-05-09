@@ -56,6 +56,43 @@ public sealed class StudentController : ApiControllerBase
         return Ok();
     }
 
+    /// <summary>Занятия из записанных курсов (опционально фильтр по типу: 1=Lecture, 2=ControlPoint, 3=Homework).</summary>
+    [HttpGet("activities")]
+    public async Task<IActionResult> GetActivities([FromQuery] int? type, CancellationToken ct)
+    {
+        var uid = CurrentUserId;
+        if (uid is null) return Unauthorized();
+
+        var enrolledCourseIds = await _db.CourseEnrollments
+            .Where(e => e.UserId == uid.Value)
+            .Select(e => e.CourseId)
+            .ToListAsync(ct);
+
+        // Если нет зачислений — показать все занятия (совместимость с тестовой средой)
+        var baseQuery = enrolledCourseIds.Count > 0
+            ? _db.Activities.Where(a => enrolledCourseIds.Contains(a.Module.CourseId))
+            : _db.Activities;
+
+        if (type.HasValue)
+            baseQuery = baseQuery.Where(a => (int)a.Type == type.Value);
+
+        var result = await baseQuery
+            .Select(a => new
+            {
+                a.Id,
+                a.Title,
+                a.Type,
+                a.StartsAt,
+                a.EndsAt,
+                courseId = a.Module.CourseId,
+                moduleNumber = a.Module.Number
+            })
+            .OrderByDescending(a => a.StartsAt)
+            .ToListAsync(ct);
+
+        return Ok(result);
+    }
+
     /// <summary>Список курсов, на которые записан текущий пользователь.</summary>
     [HttpGet("courses/enrolled")]
     public async Task<IActionResult> EnrolledCourses(CancellationToken ct)

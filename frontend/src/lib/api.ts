@@ -156,6 +156,8 @@ export const student = {
     del<void>(`/api/student/courses/${courseId}/enroll`),
   enrolledCourses: () =>
     get<(Course & { enrolledAt: string })[]>("/api/student/courses/enrolled"),
+  activities: (type?: number) =>
+    get<StudentActivity[]>(`/api/student/activities${type !== undefined ? `?type=${type}` : ""}`),
 };
 
 // ── Admin user management ─────────────────────────────────────────────────────
@@ -203,6 +205,16 @@ export const teaching = {
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+export interface StudentActivity {
+  id: string;
+  title: string;
+  type: number;
+  startsAt: string;
+  endsAt: string;
+  courseId: string;
+  moduleNumber: number;
+}
+
 export interface Course {
   id: string;
   code: string;
