@@ -199,6 +199,11 @@ export const studentApi = {
   enroll: (courseId: string) => post(`/api/student/courses/${courseId}/enroll`),
 };
 
+// ── Assistant stats ───────────────────────────────────────────────────────────
+export const assistantStats = {
+  mySessions: () => get<AssistantSession[]>("/api/assistant/my-sessions"),
+};
+
 // ── Assistant applications ────────────────────────────────────────────────────
 export const assistantApps = {
   list: (activityId: string) => get<AssistantApplicationDto[]>(`/api/activities/${activityId}/assistant-applications`),
@@ -224,7 +229,7 @@ export const ktApi = {
 // ── Teaching enhancements ─────────────────────────────────────────────────────
 export const teachingApi = {
   ...teaching,
-  startActivity: (activityId: string) => post(`/api/teaching/activities/${activityId}/start`),
+  startActivity: (activityId: string) => post<{ theoryTestUrl?: string | null }>(`/api/teaching/activities/${activityId}/start`),
   finishActivity: (activityId: string) => post(`/api/teaching/activities/${activityId}/finish`),
   enrollBulk: (courseId: string, emails: string[]) =>
     post<{ added: number; notFound: number }>(`/api/teaching/courses/${courseId}/enroll-bulk`, { emails }),
@@ -405,6 +410,21 @@ export interface ActivityTeam {
   name: string;
   members: { userId: string; displayName: string; isAbsent: boolean }[];
   assistants: { assistantId: string; displayName: string }[];
+}
+
+export interface AssistantSession {
+  id: string;
+  activityId: string;
+  activityTitle: string;
+  activityType: string;
+  activityStatus: string;
+  activityStartsAt: string;
+  moduleId: string;
+  moduleNumber: number;
+  moduleTitle: string;
+  courseId: string;
+  courseCode: string;
+  courseTitle: string;
 }
 
 export interface KtStudentSubmission {

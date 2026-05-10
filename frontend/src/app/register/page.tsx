@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { auth } from "@/lib/api";
+import { auth, setToken } from "@/lib/api";
 import { toast } from "sonner";
 
 export default function RegisterPage() {
@@ -20,9 +20,10 @@ export default function RegisterPage() {
     }
     setLoading(true);
     try {
-      await auth.register(email, password, displayName);
-      toast.success("Аккаунт создан! Войдите в систему.");
-      router.replace("/login");
+      const data = await auth.register(email, password, displayName);
+      setToken(data.accessToken);
+      toast.success("Аккаунт создан! Запишитесь на курс.");
+      router.replace("/courses");
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Ошибка регистрации");
     } finally {

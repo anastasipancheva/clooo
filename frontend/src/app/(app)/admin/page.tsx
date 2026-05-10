@@ -198,28 +198,31 @@ export default function AdminPage() {
     } catch (e: unknown) { toast.error(e instanceof Error ? e.message : "Ошибка"); }
   }
 
-  async function addActivity() {
-    if (!selectedModuleId || !actTitle || !actStart || !actEnd) {
-      toast.error("Заполните все поля занятия"); return;
+  async function addActivity(moduleId: string) {
+    if (!actTitle || !actStart || !actEnd) {
+      toast.error("Заполните название и даты занятия"); return;
     }
     const start = new Date(actStart);
     const end = new Date(actEnd);
     if (end <= start) { toast.error("Дата окончания должна быть позже даты начала"); return; }
 
-    // Validate against module dates
-    const mod = structure?.modules.find(m => m.id === selectedModuleId);
+    // Validate against module dates using DATE-ONLY strings (avoids timezone mismatch)
+    const mod = structure?.modules.find(m => m.id === moduleId);
     if (mod) {
-      const mStart = new Date(mod.startsAt);
-      const mEnd = new Date(mod.endsAt);
-      if (start < mStart || end > mEnd) {
-        toast.error(`Занятие должно быть в пределах дат модуля: ${mStart.toLocaleDateString("ru")} — ${mEnd.toLocaleDateString("ru")}`);
+      const startDate = actStart.slice(0, 10);   // "YYYY-MM-DD" from datetime-local
+      const endDate = actEnd.slice(0, 10);
+      const mStartDate = mod.startsAt.slice(0, 10);
+      const mEndDate = mod.endsAt.slice(0, 10);
+      if (startDate < mStartDate || endDate > mEndDate) {
+        toast.error(`Занятие должно быть в пределах дат модуля: ${new Date(mod.startsAt).toLocaleDateString("ru")} — ${new Date(mod.endsAt).toLocaleDateString("ru")}`);
         return;
       }
     }
     try {
-      await teaching.addActivity(selectedModuleId, parseInt(actType), actTitle, start.toISOString(), end.toISOString());
+      await teaching.addActivity(moduleId, parseInt(actType), actTitle, start.toISOString(), end.toISOString());
       toast.success("Занятие добавлено");
       setActTitle(""); setActStart(""); setActEnd("");
+      setSelectedModuleId(null); // close inline form
       await loadStructure();
     } catch (e: unknown) { toast.error(e instanceof Error ? e.message : "Ошибка"); }
   }
@@ -288,7 +291,14 @@ export default function AdminPage() {
 
   // ── schedule tab ───────────────────────────────────────────────────────────
   async function startActivity(id: string) {
-    try { await teachingApi.startActivity(id); toast.success("Занятие начато"); await loadSchedule(); }
+    try {
+      const r = await teachingApi.startActivity(id);
+      toast.success("Занятие начато — студенты получили уведомление");
+      if (r?.theoryTestUrl) {
+        toast.info(`Мини-тест отправлен студентам: ${r.theoryTestUrl}`, { duration: 8000 });
+      }
+      await loadSchedule();
+    }
     catch (e: unknown) { toast.error(e instanceof Error ? e.message : "Ошибка"); }
   }
 
@@ -442,42 +452,6 @@ export default function AdminPage() {
             </div>
           </Card>
 
-          {/* Add activity */}
-          <Card>
-            <SectionTitle>Добавить занятие в модуль</SectionTitle>
-            <div className="flex flex-wrap gap-3 items-end">
-              <div>
-                <Label>Модуль</Label>
-                <select className={`${INPUT} pr-8`} value={selectedModuleId ?? ""} onChange={e => setSelectedModuleId(e.target.value || null)}>
-                  <option value="">— выберите —</option>
-                  {structure?.modules.map(m => (
-                    <option key={m.id} value={m.id}>{m.number}. {m.title}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <Label>Тип</Label>
-                <select className={`${INPUT} pr-8`} value={actType} onChange={e => setActType(e.target.value)}>
-                  <option value="0">Лекция</option>
-                  <option value="1">КТ</option>
-                  <option value="2">ДЗ-сессия</option>
-                </select>
-              </div>
-              <div><Label>Название</Label><input className={`${INPUT} w-44`} value={actTitle} onChange={e => setActTitle(e.target.value)} placeholder="Лекция 1" /></div>
-              <div><Label>Начало</Label><input className={INPUT} type="datetime-local" value={actStart} onChange={e => setActStart(e.target.value)} /></div>
-              <div><Label>Конец</Label><input className={INPUT} type="datetime-local" value={actEnd} onChange={e => setActEnd(e.target.value)} /></div>
-              <button onClick={addActivity} className={BTN_PRIMARY}><PlusCircle size={14} />Добавить</button>
-            </div>
-            {selectedModuleId && structure?.modules.find(m => m.id === selectedModuleId) && (() => {
-              const mod = structure.modules.find(m => m.id === selectedModuleId)!;
-              return (
-                <p className="text-xs text-[#9CA3AF] mt-2">
-                  Даты модуля: {new Date(mod.startsAt).toLocaleDateString("ru")} — {new Date(mod.endsAt).toLocaleDateString("ru")}
-                </p>
-              );
-            })()}
-          </Card>
-
           {/* Add task set */}
           <Card>
             <SectionTitle>Добавить набор задач</SectionTitle>
@@ -538,25 +512,85 @@ export default function AdminPage() {
                 )}
                 {structure.modules.map(m => (
                   <div key={m.id} className="border border-[#E5E7EB] rounded-lg overflow-hidden">
+                    {/* Module header */}
                     <div className="bg-[#F9FAFB] px-4 py-2.5 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-[#005BFF] uppercase">М{m.number}</span>
                         <span className="text-sm font-semibold text-[#1A1A1B]">{m.title}</span>
                       </div>
-                      <span className="text-xs text-[#9CA3AF]">
-                        {new Date(m.startsAt).toLocaleDateString("ru")} — {new Date(m.endsAt).toLocaleDateString("ru")}
-                      </span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-[#9CA3AF]">
+                          {new Date(m.startsAt).toLocaleDateString("ru")} — {new Date(m.endsAt).toLocaleDateString("ru")}
+                        </span>
+                        <button
+                          onClick={() => {
+                            setSelectedModuleId(selectedModuleId === m.id ? null : m.id);
+                            setActTitle(""); setActStart(""); setActEnd(""); setActType("0");
+                          }}
+                          className={`flex items-center gap-1 h-7 px-2.5 rounded-md text-xs font-medium transition-colors ${
+                            selectedModuleId === m.id
+                              ? "bg-[#005BFF] text-white"
+                              : "bg-[#EAF2FF] text-[#005BFF] hover:bg-[#D1E6FF]"
+                          }`}>
+                          <PlusCircle size={12} />Занятие
+                        </button>
+                      </div>
                     </div>
-                    {m.activities.length === 0 && (
-                      <p className="px-4 py-2 text-xs text-[#9CA3AF]">Нет занятий</p>
+
+                    {/* Inline add-activity form */}
+                    {selectedModuleId === m.id && (
+                      <div className="px-4 py-3 border-b border-[#E5E7EB] bg-[#FAFBFF]">
+                        <p className="text-xs text-[#9CA3AF] mb-2">
+                          Период модуля: {new Date(m.startsAt).toLocaleDateString("ru")} — {new Date(m.endsAt).toLocaleDateString("ru")}
+                        </p>
+                        <div className="flex flex-wrap gap-2 items-end">
+                          <div>
+                            <Label>Тип</Label>
+                            <select className={`${INPUT} pr-8`} value={actType} onChange={e => setActType(e.target.value)}>
+                              <option value="0">Лекция</option>
+                              <option value="1">КТ</option>
+                              <option value="2">ДЗ-сессия</option>
+                            </select>
+                          </div>
+                          <div>
+                            <Label>Название</Label>
+                            <input className={`${INPUT} w-40`} value={actTitle} onChange={e => setActTitle(e.target.value)} placeholder="Лекция 1" autoFocus />
+                          </div>
+                          <div>
+                            <Label>Начало</Label>
+                            <input className={INPUT} type="datetime-local" value={actStart} onChange={e => setActStart(e.target.value)} />
+                          </div>
+                          <div>
+                            <Label>Конец</Label>
+                            <input className={INPUT} type="datetime-local" value={actEnd} onChange={e => setActEnd(e.target.value)} />
+                          </div>
+                          <button onClick={() => addActivity(m.id)} className={BTN_PRIMARY}>
+                            <PlusCircle size={14} />Добавить
+                          </button>
+                          <button onClick={() => setSelectedModuleId(null)} className={BTN_GHOST}>
+                            Отмена
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Activities list */}
+                    {m.activities.length === 0 && selectedModuleId !== m.id && (
+                      <p className="px-4 py-3 text-xs text-[#9CA3AF]">Нет занятий — нажмите «+ Занятие» выше</p>
                     )}
                     {m.activities.length > 0 && (
                       <div className="divide-y divide-[#F3F4F6]">
                         {m.activities.map(a => (
-                          <div key={a.id} className="px-4 py-2">
-                            <div className="flex items-center gap-2 mb-1">
-                              <ChevronRight size={12} className="text-[#9CA3AF]" />
-                              <span className="text-xs text-[#6B7280]">{activityTypeLabels[a.type === "Lecture" ? "0" : a.type === "ControlPoint" ? "1" : "2"] ?? a.type}</span>
+                          <div key={a.id} className="px-4 py-2.5">
+                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                              <ChevronRight size={12} className="text-[#9CA3AF] flex-shrink-0" />
+                              <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+                                a.type === "ControlPoint" ? "bg-[#FEF3C7] text-[#D97706]" :
+                                a.type === "Lecture" ? "bg-[#EAF2FF] text-[#005BFF]" :
+                                "bg-[#F3F4F6] text-[#6B7280]"
+                              }`}>
+                                {activityTypeLabels[a.type === "Lecture" ? "0" : a.type === "ControlPoint" ? "1" : "2"] ?? a.type}
+                              </span>
                               <span className="text-sm font-medium text-[#1A1A1B]">{a.title}</span>
                               <span className="text-xs text-[#9CA3AF]">
                                 {new Date(a.startsAt).toLocaleString("ru", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}

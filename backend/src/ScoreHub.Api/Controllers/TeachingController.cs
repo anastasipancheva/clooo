@@ -20,11 +20,13 @@ public sealed class TeachingController : ApiControllerBase
 {
     private readonly ITeachingSetupService _teaching;
     private readonly ScoreHubDbContext _db;
+    private readonly INotificationService _notifications;
 
-    public TeachingController(ITeachingSetupService teaching, ScoreHubDbContext db)
+    public TeachingController(ITeachingSetupService teaching, ScoreHubDbContext db, INotificationService notifications)
     {
         _teaching = teaching;
         _db = db;
+        _notifications = notifications;
     }
 
     private IActionResult FromOp<T>(OpResult<T> r) =>
@@ -179,15 +181,38 @@ public sealed class TeachingController : ApiControllerBase
         return FromOpUnit(await _teaching.SetTeamAssistants(uid.Value, teamId, dto.Ids, ct));
     }
 
-    /// <summary>Перевести занятие в статус Active (начать пару).</summary>
+    /// <summary>Перевести занятие в статус Active (начать пару). Отправляет уведомление всем записанным студентам.</summary>
     [HttpPost("activities/{activityId:guid}/start")]
     public async Task<IActionResult> StartActivity(Guid activityId, CancellationToken ct)
     {
-        var activity = await _db.Activities.FirstOrDefaultAsync(a => a.Id == activityId, ct);
+        var activity = await _db.Activities
+            .Include(a => a.Module)
+            .FirstOrDefaultAsync(a => a.Id == activityId, ct);
         if (activity is null) return NotFound();
+
         activity.Status = ActivityStatus.Active;
         await _db.SaveChangesAsync(ct);
-        return Ok();
+
+        // Уведомить всех записанных студентов
+        var enrolledIds = await _db.CourseEnrollments
+            .Where(e => e.CourseId == activity.Module.CourseId)
+            .Select(e => e.UserId)
+            .ToListAsync(ct);
+
+        if (enrolledIds.Count > 0)
+        {
+            string? body = activity.TheoryTestUrl is not null
+                ? $"Ссылка на тест: {activity.TheoryTestUrl}"
+                : null;
+            await _notifications.NotifyManyAsync(
+                enrolledIds,
+                "ActivityStarted",
+                $"Занятие началось: {activity.Title}",
+                body,
+                ct);
+        }
+
+        return Ok(new { theoryTestUrl = activity.TheoryTestUrl });
     }
 
     /// <summary>Перевести занятие в статус Finished (завершить пару).</summary>

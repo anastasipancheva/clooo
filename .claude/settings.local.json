@@ -43,7 +43,27 @@
       "Bash(grep -v \"^$\")",
       "Bash(dir \"C:\\\\Users\\\\User\\\\Desktop\\\\ScoreHub_Projec\\\\backend\\\\src\\\\ScoreHub.Infrastructure\\\\Migrations\")",
       "Bash(curl -s -X POST http://localhost:5062/api/auth/register -H 'Content-Type: application/json' -d '{\"email\":\"student@test.com\",\"password\":\"Student1234\",\"displayName\":\"Student Ivanov\"}')",
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "Bash(npx next *)",
+      "Bash(python3 -c ' *)",
+      "Bash(taskkill /F /IM \"ScoreHub.Api.exe\")",
+      "Bash(taskkill /F /IM \"node.exe\")",
+      "Read(//tmp/**)",
+      "Bash(netstat -ano)",
+      "Bash(taskkill /F /PID 20520)",
+      "Bash(cmd /c \"taskkill /F /PID 20520\")",
+      "Bash(wmic process *)",
+      "Bash(git rm *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(npx tsc *)",
+      "Bash(Get-Process -Name \"ScoreHub.Api\" -ErrorAction SilentlyContinue)",
+      "Bash(Stop-Process -Force)",
+      "Bash(Get-Process dotnet *)",
+      "Bash(taskkill /F /IM \"dotnet.exe\")",
+      "Bash(cat \"C:\\\\Users\\\\User\\\\Desktop\\\\backend.log\")",
+      "Bash(sleep 8 && cat \"C:\\\\Users\\\\User\\\\Desktop\\\\backend.log\" 2>/dev/null | grep -E \"\\(Now listening|Error|Exception|warn\\)\" | head -20)"
     ]
   }
 }
