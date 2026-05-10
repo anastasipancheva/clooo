@@ -40,9 +40,9 @@ public sealed class AssistantStatsController : ApiControllerBase
                 CourseCode = a.Activity.Module.Course.Code,
                 CourseTitle = a.Activity.Module.Course.Title,
             })
-            .OrderBy(a => a.ActivityStartsAt)
             .ToListAsync(ct);
 
-        return Ok(sessions);
+        // Сортируем в памяти — SQLite не поддерживает ORDER BY DateTimeOffset
+        return Ok(sessions.OrderBy(a => a.ActivityStartsAt));
     }
 }

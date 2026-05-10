@@ -51,7 +51,11 @@ public sealed class AuthController : ControllerBase
         _db.Users.Add(user);
         await _db.SaveChangesAsync(ct);
 
-        return StatusCode(StatusCodes.Status201Created, new { user.Id, user.Email, user.DisplayName });
+        // Сразу выдаём JWT — фронтенд перенаправит на /courses без лишнего шага логина
+        var roles = new[] { user.Role.ToString() };
+        var token = _jwt.CreateAccessToken(user.Id, user.Email, user.DisplayName, roles);
+        return StatusCode(StatusCodes.Status201Created,
+            new LoginResponse(token.Token, token.ExpiresAtUtc, user.Id, user.Email, user.DisplayName, roles));
     }
 
     /// <summary>Вход по email и паролю; в ответе JWT и срок действия.</summary>

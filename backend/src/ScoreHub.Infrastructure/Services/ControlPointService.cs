@@ -120,10 +120,9 @@ public sealed class ControlPointService : IControlPointService
         if (activity is null || activity.Type != ActivityType.ControlPoint)
             return OpResult<IReadOnlyList<KtQueueRow>>.Fail("Неверное занятие.");
 
-        var list = await _db.TaskSubmissions
+        var raw = await _db.TaskSubmissions
             .Where(s => s.ActivityId == activityId && s.TaskItemId == taskItemId && s.StudentId != null)
             .Where(s => s.Status == SubmissionStatus.ReadyForReview || s.Status == SubmissionStatus.InReview)
-            .OrderBy(s => s.ReadyAt)
             .Join(_db.Users, s => s.StudentId, u => u.Id, (s, u) => new KtQueueRow(
                 s.Id,
                 u.Id,
@@ -132,6 +131,8 @@ public sealed class ControlPointService : IControlPointService
                 s.Status.ToString()))
             .ToListAsync(ct);
 
+        // Сортируем в памяти — SQLite не поддерживает ORDER BY DateTimeOffset
+        var list = raw.OrderBy(r => r.ReadyAt).ToList();
         return OpResult<IReadOnlyList<KtQueueRow>>.Ok(list);
     }
 
@@ -154,15 +155,17 @@ public sealed class ControlPointService : IControlPointService
 
         await using var tx = await _db.Database.BeginTransactionAsync(ct);
 
-        var candidates = await _db.TaskSubmissions
+        // Сортируем в памяти — SQLite не поддерживает ORDER BY DateTimeOffset
+        var candidates = (await _db.TaskSubmissions
             .Where(s =>
                 s.ActivityId == activityId
                 && s.TaskItemId == taskItemId
                 && s.Status == SubmissionStatus.ReadyForReview
                 && s.StudentId != null)
-            .OrderBy(s => s.ReadyAt)
             .Take(50)
-            .ToListAsync(ct);
+            .ToListAsync(ct))
+            .OrderBy(s => s.ReadyAt)
+            .ToList();
 
         TaskSubmission? next = null;
         foreach (var c in candidates)

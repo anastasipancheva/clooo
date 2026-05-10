@@ -170,10 +170,12 @@ public sealed class GroupActivityService : IGroupActivityService
             query = query.Where(h => myTeamIds.Contains(h.TeamId));
         }
 
-        var list = await query
-            .OrderBy(h => h.CreatedAt)
+        // Сортируем в памяти — SQLite не поддерживает ORDER BY DateTimeOffset
+        var list = (await query
             .Select(h => new HelpRequestRow(h.Id, h.TeamId, h.Team.Name, h.CreatedByUserId, h.CreatedAt, h.Message))
-            .ToListAsync(ct);
+            .ToListAsync(ct))
+            .OrderBy(h => h.CreatedAt)
+            .ToList();
 
         return OpResult<IReadOnlyList<HelpRequestRow>>.Ok(list);
     }
@@ -219,7 +221,8 @@ public sealed class GroupActivityService : IGroupActivityService
                 .ToListAsync(ct);
         }
 
-        var rows = await _db.TaskSubmissions
+        // Сортируем в памяти — SQLite не поддерживает ORDER BY DateTimeOffset
+        var rows = (await _db.TaskSubmissions
             .Include(s => s.Team)
             .Include(s => s.TaskItem)
             .Where(s =>
@@ -227,7 +230,6 @@ public sealed class GroupActivityService : IGroupActivityService
                 && s.TeamId != null
                 && myTeams.Contains(s.TeamId!.Value)
                 && (s.Status == SubmissionStatus.ReadyForReview || s.Status == SubmissionStatus.InReview))
-            .OrderBy(s => s.ReadyAt)
             .Select(s => new TeamSubmissionRow(
                 s.Id,
                 s.TeamId!.Value,
@@ -238,7 +240,9 @@ public sealed class GroupActivityService : IGroupActivityService
                 s.ReadyAt,
                 s.ReviewerId,
                 s.DefenderUserId))
-            .ToListAsync(ct);
+            .ToListAsync(ct))
+            .OrderBy(r => r.ReadyAt)
+            .ToList();
 
         return OpResult<IReadOnlyList<TeamSubmissionRow>>.Ok(rows);
     }

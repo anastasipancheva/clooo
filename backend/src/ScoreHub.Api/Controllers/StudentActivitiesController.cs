@@ -31,7 +31,6 @@ public sealed class StudentActivitiesController : ApiControllerBase
             .AsNoTracking()
             .Where(a => courseIds.Contains(a.Module.CourseId)
                 && a.Status != ActivityStatus.Finished)
-            .OrderBy(a => a.StartsAt)
             .Select(a => new {
                 a.Id,
                 a.Title,
@@ -48,7 +47,8 @@ public sealed class StudentActivitiesController : ApiControllerBase
             })
             .ToListAsync(ct);
 
-        return Ok(activities);
+        // Сортируем в памяти — SQLite не поддерживает ORDER BY DateTimeOffset
+        return Ok(activities.OrderBy(a => a.StartsAt));
     }
 
     /// <summary>Самостоятельная запись студента на курс.</summary>

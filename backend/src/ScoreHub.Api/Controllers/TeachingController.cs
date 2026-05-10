@@ -39,6 +39,8 @@ public sealed class TeachingController : ApiControllerBase
     [HttpGet("courses/{courseId:guid}/structure")]
     public async Task<IActionResult> GetStructure(Guid courseId, CancellationToken ct)
     {
+        // Не используем OrderBy по DateTimeOffset — SQLite это не поддерживает.
+        // Сортировку активностей делаем в памяти после загрузки.
         var course = await _db.Courses
             .AsNoTracking()
             .Where(c => c.Id == courseId)
@@ -58,7 +60,6 @@ public sealed class TeachingController : ApiControllerBase
                         m.StartsAt,
                         m.EndsAt,
                         Activities = m.Activities
-                            .OrderBy(a => a.StartsAt)
                             .Select(a => new
                             {
                                 a.Id,
@@ -90,7 +91,26 @@ public sealed class TeachingController : ApiControllerBase
             .FirstOrDefaultAsync(ct);
 
         if (course is null) return NotFound();
-        return Ok(course);
+
+        // Сортируем занятия в памяти
+        var result = new
+        {
+            course.Id,
+            course.Code,
+            course.Title,
+            course.AcademicYear,
+            Modules = course.Modules.Select(m => new
+            {
+                m.Id,
+                m.Number,
+                m.Title,
+                m.StartsAt,
+                m.EndsAt,
+                Activities = m.Activities.OrderBy(a => a.StartsAt).ToList()
+            }).ToList()
+        };
+
+        return Ok(result);
     }
 
     /// <summary>Создать курс (код, название, учебный год).</summary>
@@ -258,10 +278,11 @@ public sealed class TeachingController : ApiControllerBase
     [HttpGet("courses/{courseId:guid}/activities")]
     public async Task<IActionResult> GetCourseActivities(Guid courseId, CancellationToken ct)
     {
+        // OrderBy(StartsAt) убран из SQL — SQLite не поддерживает ORDER BY DateTimeOffset.
+        // Сортируем в памяти после ToListAsync.
         var activities = await _db.Activities
             .AsNoTracking()
             .Where(a => a.Module.CourseId == courseId)
-            .OrderBy(a => a.StartsAt)
             .Select(a => new {
                 a.Id, a.Title, a.Type,
                 typeLabel = a.Type == ActivityType.Lecture ? "Лекция"
@@ -276,7 +297,8 @@ public sealed class TeachingController : ApiControllerBase
                 moduleId = a.Module.Id
             })
             .ToListAsync(ct);
-        return Ok(activities);
+
+        return Ok(activities.OrderBy(a => a.StartsAt));
     }
 
     /// <summary>Удалить курс вместе со всеми модулями, занятиями и задачами.</summary>
