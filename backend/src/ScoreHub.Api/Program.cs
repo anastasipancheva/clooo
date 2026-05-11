@@ -105,9 +105,7 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization();
 
-// CORS: читаем список разрешённых origin из конфига (через запятую).
-// Локально: CORS_ORIGINS=http://localhost:3000
-// Прод:     CORS_ORIGINS=https://your-app.vercel.app,http://localhost:3000
+// CORS: origins прописаны в appsettings.json (ключ CORS_ORIGINS, через запятую)
 var corsOrigins = (builder.Configuration["CORS_ORIGINS"] ?? "http://localhost:3000")
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 Console.WriteLine(corsOrigins);
