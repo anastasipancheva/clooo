@@ -65,7 +65,9 @@
       "Bash(cat \"C:\\\\Users\\\\User\\\\Desktop\\\\backend.log\")",
       "Bash(sleep 8 && cat \"C:\\\\Users\\\\User\\\\Desktop\\\\backend.log\" 2>/dev/null | grep -E \"\\(Now listening|Error|Exception|warn\\)\" | head -20)",
       "Bash(curl -s -X POST http://localhost:5062/api/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"tteacher1778431245@test.com\",\"password\":\"password123\"}')",
-      "Bash(xargs cat)"
+      "Bash(xargs cat)",
+      "Bash(git pull *)",
+      "Bash(git stash *)"
     ]
   }
 }
