@@ -110,7 +110,7 @@ builder.Services.AddAuthorization();
 // Прод:     CORS_ORIGINS=https://your-app.vercel.app,http://localhost:3000
 var corsOrigins = (builder.Configuration["CORS_ORIGINS"] ?? "http://localhost:3000")
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
+Console.WriteLine(corsOrigins);
 builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
     p.WithOrigins(corsOrigins)
      .AllowAnyHeader()
