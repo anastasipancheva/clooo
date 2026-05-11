@@ -37,7 +37,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const navItems = [
     { href: "/", label: "Главная", icon: LayoutDashboard, show: isStudent || isAssistant },
     { href: "/scores", label: "Баллы", icon: Star, show: isStudent },
-    { href: "/courses", label: "Курсы", icon: BookOpen, show: isStudent },
+    { href: "/courses", label: "Курсы", icon: BookOpen, show: isStudent || isAssistant },
     { href: "/assistant", label: "Ассистент", icon: Users, show: isAssistant },
     { href: "/admin", label: "Управление", icon: UserCog, show: isTeacher },
     { href: "/assistant", label: "Сессия", icon: Users, show: isTeacher },

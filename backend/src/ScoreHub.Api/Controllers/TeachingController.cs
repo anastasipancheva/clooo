@@ -213,24 +213,28 @@ public sealed class TeachingController : ApiControllerBase
         activity.Status = ActivityStatus.Active;
         await _db.SaveChangesAsync(ct);
 
-        // Уведомить всех записанных студентов
-        var enrolledIds = await _db.CourseEnrollments
-            .Where(e => e.CourseId == activity.Module.CourseId)
-            .Select(e => e.UserId)
-            .ToListAsync(ct);
-
-        if (enrolledIds.Count > 0)
+        // Уведомления — некритичны, не блокируем ответ при ошибке SignalR/DB
+        try
         {
-            string? body = activity.TheoryTestUrl is not null
-                ? $"Ссылка на тест: {activity.TheoryTestUrl}"
-                : null;
-            await _notifications.NotifyManyAsync(
-                enrolledIds,
-                "ActivityStarted",
-                $"Занятие началось: {activity.Title}",
-                body,
-                ct);
+            var enrolledIds = await _db.CourseEnrollments
+                .Where(e => e.CourseId == activity.Module.CourseId)
+                .Select(e => e.UserId)
+                .ToListAsync(ct);
+
+            if (enrolledIds.Count > 0)
+            {
+                string? body = activity.TheoryTestUrl is not null
+                    ? $"Ссылка на тест: {activity.TheoryTestUrl}"
+                    : null;
+                await _notifications.NotifyManyAsync(
+                    enrolledIds,
+                    "ActivityStarted",
+                    $"Занятие началось: {activity.Title}",
+                    body,
+                    ct);
+            }
         }
+        catch { /* уведомления некритичны */ }
 
         return Ok(new { theoryTestUrl = activity.TheoryTestUrl });
     }
@@ -250,6 +254,9 @@ public sealed class TeachingController : ApiControllerBase
     [HttpPost("courses/{courseId:guid}/enroll-bulk")]
     public async Task<IActionResult> EnrollBulk(Guid courseId, [FromBody] EnrollBulkDto dto, CancellationToken ct)
     {
+        if (dto?.Emails is null || dto.Emails.Count == 0)
+            return BadRequest(new { error = "Emails list is required." });
+
         var course = await _db.Courses.FirstOrDefaultAsync(c => c.Id == courseId, ct);
         if (course is null) return NotFound();
 

@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 
 type Tab = "courses" | "structure" | "materials" | "students" | "scores" | "schedule" | "teams";
+type StudentsSubTab = "students" | "staff";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 const INPUT =
@@ -40,6 +41,13 @@ const STATUS_LABEL: Record<string, string> = {
   Active: "Идёт", Finished: "Завершено", Scheduled: "Запланировано",
 };
 
+function defaultAcademicYear() {
+  const now = new Date();
+  const y = now.getFullYear();
+  // Если сентябрь (8) или позже — учебный год y/y+1, иначе y-1/y
+  return now.getMonth() >= 8 ? `${y}/${y + 1}` : `${y - 1}/${y}`;
+}
+
 // ─── component ──────────────────────────────────────────────────────────────
 export default function AdminPage() {
   const [tab, setTab] = useState<Tab>("courses");
@@ -49,7 +57,7 @@ export default function AdminPage() {
   // Courses tab
   const [newCode, setNewCode] = useState("");
   const [newTitle, setNewTitle] = useState("");
-  const [newYear, setNewYear] = useState("2024/2025");
+  const [newYear, setNewYear] = useState(defaultAcademicYear);
 
   // Structure tab
   const [structure, setStructure] = useState<CourseStructure | null>(null);
@@ -60,15 +68,9 @@ export default function AdminPage() {
   const [moduleEnd, setModuleEnd] = useState("");
   const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
   const [actTitle, setActTitle] = useState("");
-  const [actType, setActType] = useState("0");
+  const [actType, setActType] = useState("1"); // 1=Лекция, 2=КТ, 3=ДЗ-сессия
   const [actStart, setActStart] = useState("");
   const [actEnd, setActEnd] = useState("");
-  const [selectedActId, setSelectedActId] = useState<string | null>(null);
-  const [taskSetTitle, setTaskSetTitle] = useState("");
-  const [selectedTaskSetId, setSelectedTaskSetId] = useState<string | null>(null);
-  const [taskCode, setTaskCode] = useState("");
-  const [taskTitle, setTaskTitle] = useState("");
-  const [taskPoints, setTaskPoints] = useState("1");
 
   // Materials tab
   const [matActivity, setMatActivity] = useState<TeacherActivity | null>(null);
@@ -76,8 +78,11 @@ export default function AdminPage() {
   const [matTestUrl, setMatTestUrl] = useState("");
   const [matFileUrl, setMatFileUrl] = useState("");
   const [matSaving, setMatSaving] = useState(false);
+  // For ДЗ-сессия: IDs of all activities in the selected module group
+  const [matHwModuleIds, setMatHwModuleIds] = useState<string[]>([]);
 
   // Students tab
+  const [studentsSubTab, setStudentsSubTab] = useState<StudentsSubTab>("students");
   const [courseStudents, setCourseStudents] = useState<{ id: string; email: string; displayName: string; role: string }[]>([]);
   const [allUsers, setAllUsers] = useState<{ id: string; email: string; displayName: string; role: string }[]>([]);
   const [bulkEmails, setBulkEmails] = useState("");
@@ -118,15 +123,18 @@ export default function AdminPage() {
     }
   }, [selected]);
 
+  const loadAllUsers = useCallback(async () => {
+    try {
+      const all = await admin.listUsers();
+      setAllUsers(all);
+    } catch { /* ignore */ }
+  }, []);
+
   const loadStudents = useCallback(async () => {
     if (!selected) return;
     try {
-      const [enrolled, all] = await Promise.all([
-        teachingApi.getCourseStudents(selected),
-        admin.listUsers(),
-      ]);
+      const enrolled = await teachingApi.getCourseStudents(selected);
       setCourseStudents(enrolled);
-      setAllUsers(all);
     } catch { /* ignore */ }
   }, [selected]);
 
@@ -155,11 +163,16 @@ export default function AdminPage() {
     if (!selected) return;
     if (tab === "scores") courses.scores(selected).then(setAllScores).catch(() => setAllScores([]));
     if (tab === "structure") loadStructure();
-    if (tab === "students") loadStudents();
+    if (tab === "students") { loadStudents(); }
     if (tab === "schedule") loadSchedule();
     if (tab === "materials") loadSchedule();
     if (tab === "teams") loadSchedule();
   }, [selected, tab, loadStructure, loadStudents, loadSchedule]);
+
+  // Загружаем всех пользователей при входе на вкладку Студенты (не ждём выбора курса)
+  useEffect(() => {
+    if (tab === "students") loadAllUsers();
+  }, [tab, loadAllUsers]);
 
   // ── courses tab ────────────────────────────────────────────────────────────
   async function createCourse() {
@@ -206,10 +219,9 @@ export default function AdminPage() {
     const end = new Date(actEnd);
     if (end <= start) { toast.error("Дата окончания должна быть позже даты начала"); return; }
 
-    // Validate against module dates using DATE-ONLY strings (avoids timezone mismatch)
     const mod = structure?.modules.find(m => m.id === moduleId);
     if (mod) {
-      const startDate = actStart.slice(0, 10);   // "YYYY-MM-DD" from datetime-local
+      const startDate = actStart.slice(0, 10);
       const endDate = actEnd.slice(0, 10);
       const mStartDate = mod.startsAt.slice(0, 10);
       const mEndDate = mod.endsAt.slice(0, 10);
@@ -222,26 +234,8 @@ export default function AdminPage() {
       await teaching.addActivity(moduleId, parseInt(actType), actTitle, start.toISOString(), end.toISOString());
       toast.success("Занятие добавлено");
       setActTitle(""); setActStart(""); setActEnd("");
-      setSelectedModuleId(null); // close inline form
+      setSelectedModuleId(null);
       await loadStructure();
-    } catch (e: unknown) { toast.error(e instanceof Error ? e.message : "Ошибка"); }
-  }
-
-  async function addTaskSet() {
-    if (!selectedActId || !taskSetTitle) { toast.error("Выберите занятие и введите название"); return; }
-    try {
-      await teaching.addTaskSet(selectedActId, taskSetTitle);
-      toast.success("Набор задач добавлен");
-      setTaskSetTitle(""); await loadStructure();
-    } catch (e: unknown) { toast.error(e instanceof Error ? e.message : "Ошибка"); }
-  }
-
-  async function addTask() {
-    if (!selectedTaskSetId || !taskCode || !taskTitle) { toast.error("Заполните данные задачи"); return; }
-    try {
-      await teaching.addTask(selectedTaskSetId, taskCode, taskTitle, null, parseFloat(taskPoints));
-      toast.success("Задача добавлена");
-      setTaskCode(""); setTaskTitle(""); await loadStructure();
     } catch (e: unknown) { toast.error(e instanceof Error ? e.message : "Ошибка"); }
   }
 
@@ -251,20 +245,37 @@ export default function AdminPage() {
     setMatVideoUrl(act.preLectureVideoUrl ?? "");
     setMatTestUrl(act.theoryTestUrl ?? "");
     setMatFileUrl(act.taskFileUrl ?? "");
+    setMatHwModuleIds([]); // сброс группы ДЗ-сессий
+  }
+
+  // Выбор группы ДЗ-сессий модуля — один файл на весь модуль
+  function selectHwModule(activities: TeacherActivity[]) {
+    const first = activities[0];
+    setMatActivity(first);
+    setMatVideoUrl("");
+    setMatTestUrl("");
+    setMatFileUrl(first.taskFileUrl ?? "");
+    setMatHwModuleIds(activities.map(a => a.id));
   }
 
   async function saveMaterials() {
     if (!matActivity) return;
     setMatSaving(true);
     try {
-      await teaching.patchMaterials(matActivity.id, {
-        preLectureVideoUrl: matVideoUrl,
-        theoryTestUrl: matTestUrl,
-        taskFileUrl: matFileUrl,
-      });
+      if (matHwModuleIds.length > 0) {
+        // ДЗ-сессия: сохраняем один файл на все занятия модуля
+        await Promise.all(
+          matHwModuleIds.map(id => teaching.patchMaterials(id, { taskFileUrl: matFileUrl }))
+        );
+      } else {
+        await teaching.patchMaterials(matActivity.id, {
+          preLectureVideoUrl: matVideoUrl,
+          theoryTestUrl: matTestUrl,
+          taskFileUrl: matFileUrl,
+        });
+      }
       toast.success("Материалы сохранены");
       await loadSchedule();
-      setMatActivity(a => a ? { ...a, preLectureVideoUrl: matVideoUrl || undefined, theoryTestUrl: matTestUrl || undefined, taskFileUrl: matFileUrl || undefined } : a);
     } catch (e: unknown) { toast.error(e instanceof Error ? e.message : "Ошибка"); }
     finally { setMatSaving(false); }
   }
@@ -285,7 +296,7 @@ export default function AdminPage() {
     try {
       await admin.setUserRole(userId, roleName);
       toast.success("Роль обновлена");
-      await loadStudents();
+      await loadAllUsers();
     } catch (e: unknown) { toast.error(e instanceof Error ? e.message : "Ошибка"); }
   }
 
@@ -293,7 +304,7 @@ export default function AdminPage() {
   async function startActivity(id: string) {
     try {
       const r = await teachingApi.startActivity(id);
-      toast.success("Занятие начато — студенты получили уведомление");
+      toast.success("Занятие начато");
       if (r?.theoryTestUrl) {
         toast.info(`Мини-тест отправлен студентам: ${r.theoryTestUrl}`, { duration: 8000 });
       }
@@ -351,7 +362,8 @@ export default function AdminPage() {
     return "text-[#DC2626] bg-[#FEE2E2]";
   };
 
-  const activityTypeLabels: Record<string, string> = { "0": "Лекция", "1": "КТ", "2": "ДЗ-сессия" };
+  const activityTypeLabel = (type: string) =>
+    type === "Lecture" ? "Лекция" : type === "ControlPoint" ? "КТ" : "ДЗ-сессия";
 
   const tabs: { key: Tab; label: string }[] = [
     { key: "courses", label: "Курсы" },
@@ -362,6 +374,9 @@ export default function AdminPage() {
     { key: "schedule", label: "Расписание" },
     { key: "teams", label: "Команды" },
   ];
+
+  // Только лекции для генерации команд
+  const lectureActivities = scheduleActivities.filter(a => a.typeLabel === "Лекция");
 
   // ─── render ────────────────────────────────────────────────────────────────
   return (
@@ -425,8 +440,7 @@ export default function AdminPage() {
                       <span className="text-xs text-[#9CA3AF] ml-2">{c.academicYear}</span>
                     </div>
                     <button onClick={() => deleteCourse(c.id, c.code)}
-                      className="w-8 h-8 flex items-center justify-center rounded-lg text-[#9CA3AF] hover:text-[#EF4444] hover:bg-red-50 transition-colors"
-                      title="Удалить курс">
+                      className="w-8 h-8 flex items-center justify-center rounded-lg text-[#9CA3AF] hover:text-[#EF4444] hover:bg-red-50 transition-colors">
                       <Trash2 size={15} />
                     </button>
                   </div>
@@ -449,48 +463,6 @@ export default function AdminPage() {
               <div><Label>Начало</Label><input className={INPUT} type="date" value={moduleStart} onChange={e => setModuleStart(e.target.value)} /></div>
               <div><Label>Конец</Label><input className={INPUT} type="date" value={moduleEnd} onChange={e => setModuleEnd(e.target.value)} /></div>
               <button onClick={addModule} className={BTN_PRIMARY}><PlusCircle size={14} />Добавить</button>
-            </div>
-          </Card>
-
-          {/* Add task set */}
-          <Card>
-            <SectionTitle>Добавить набор задач</SectionTitle>
-            <div className="flex flex-wrap gap-3 items-end">
-              <div>
-                <Label>Занятие</Label>
-                <select className={`${INPUT} pr-8`} value={selectedActId ?? ""} onChange={e => setSelectedActId(e.target.value || null)}>
-                  <option value="">— выберите —</option>
-                  {structure?.modules.flatMap(m => m.activities.map(a => (
-                    <option key={a.id} value={a.id}>
-                      М{m.number} / {a.title} ({activityTypeLabels[a.type === "Lecture" ? "0" : a.type === "ControlPoint" ? "1" : "2"] ?? a.type})
-                    </option>
-                  )))}
-                </select>
-              </div>
-              <div><Label>Название набора</Label><input className={`${INPUT} w-44`} value={taskSetTitle} onChange={e => setTaskSetTitle(e.target.value)} placeholder="КТ вариант А" /></div>
-              <button onClick={addTaskSet} className={BTN_PRIMARY}><PlusCircle size={14} />Добавить</button>
-            </div>
-          </Card>
-
-          {/* Add task */}
-          <Card>
-            <SectionTitle>Добавить задачу</SectionTitle>
-            <div className="flex flex-wrap gap-3 items-end">
-              <div>
-                <Label>Набор задач</Label>
-                <select className={`${INPUT} pr-8`} value={selectedTaskSetId ?? ""} onChange={e => setSelectedTaskSetId(e.target.value || null)}>
-                  <option value="">— выберите —</option>
-                  {structure?.modules.flatMap(m => m.activities.flatMap(a =>
-                    a.taskSets.map(ts => (
-                      <option key={ts.id} value={ts.id}>М{m.number} / {a.title} / {ts.title}</option>
-                    ))
-                  ))}
-                </select>
-              </div>
-              <div><Label>Код</Label><input className={`${INPUT} w-20`} value={taskCode} onChange={e => setTaskCode(e.target.value)} placeholder="A1" /></div>
-              <div><Label>Название</Label><input className={`${INPUT} w-44`} value={taskTitle} onChange={e => setTaskTitle(e.target.value)} placeholder="Задача 1" /></div>
-              <div><Label>Баллы</Label><input className={`${INPUT} w-20`} type="number" value={taskPoints} onChange={e => setTaskPoints(e.target.value)} /></div>
-              <button onClick={addTask} className={BTN_PRIMARY}><PlusCircle size={14} />Добавить</button>
             </div>
           </Card>
 
@@ -525,7 +497,7 @@ export default function AdminPage() {
                         <button
                           onClick={() => {
                             setSelectedModuleId(selectedModuleId === m.id ? null : m.id);
-                            setActTitle(""); setActStart(""); setActEnd(""); setActType("0");
+                            setActTitle(""); setActStart(""); setActEnd(""); setActType("1");
                           }}
                           className={`flex items-center gap-1 h-7 px-2.5 rounded-md text-xs font-medium transition-colors ${
                             selectedModuleId === m.id
@@ -547,9 +519,9 @@ export default function AdminPage() {
                           <div>
                             <Label>Тип</Label>
                             <select className={`${INPUT} pr-8`} value={actType} onChange={e => setActType(e.target.value)}>
-                              <option value="0">Лекция</option>
-                              <option value="1">КТ</option>
-                              <option value="2">ДЗ-сессия</option>
+                              <option value="1">Лекция</option>
+                              <option value="2">КТ</option>
+                              <option value="3">ДЗ-сессия</option>
                             </select>
                           </div>
                           <div>
@@ -582,31 +554,20 @@ export default function AdminPage() {
                       <div className="divide-y divide-[#F3F4F6]">
                         {m.activities.map(a => (
                           <div key={a.id} className="px-4 py-2.5">
-                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <ChevronRight size={12} className="text-[#9CA3AF] flex-shrink-0" />
                               <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
                                 a.type === "ControlPoint" ? "bg-[#FEF3C7] text-[#D97706]" :
                                 a.type === "Lecture" ? "bg-[#EAF2FF] text-[#005BFF]" :
                                 "bg-[#F3F4F6] text-[#6B7280]"
                               }`}>
-                                {activityTypeLabels[a.type === "Lecture" ? "0" : a.type === "ControlPoint" ? "1" : "2"] ?? a.type}
+                                {activityTypeLabel(a.type)}
                               </span>
                               <span className="text-sm font-medium text-[#1A1A1B]">{a.title}</span>
                               <span className="text-xs text-[#9CA3AF]">
                                 {new Date(a.startsAt).toLocaleString("ru", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
                               </span>
                             </div>
-                            {a.taskSets.map(ts => (
-                              <div key={ts.id} className="ml-5 mt-1">
-                                <p className="text-xs text-[#6B7280] font-medium">{ts.title}</p>
-                                <div className="flex flex-wrap gap-1.5 mt-1">
-                                  {ts.tasks.map(t => (
-                                    <span key={t.id} className="text-xs bg-[#EAF2FF] text-[#005BFF] px-2 py-0.5 rounded font-mono">{t.code} ({t.points}б)</span>
-                                  ))}
-                                  {ts.tasks.length === 0 && <span className="text-xs text-[#9CA3AF]">нет задач</span>}
-                                </div>
-                              </div>
-                            ))}
                           </div>
                         ))}
                       </div>
@@ -631,30 +592,71 @@ export default function AdminPage() {
               <p className="text-sm text-[#9CA3AF]">Нет занятий. Добавьте их на вкладке Структура.</p>
             )}
             <div className="space-y-1.5">
-              {scheduleActivities.map(a => (
-                <button
-                  key={a.id}
-                  onClick={() => selectMatActivity(a)}
-                  className={`w-full text-left px-3 py-2.5 rounded-lg border transition-colors ${
-                    matActivity?.id === a.id
-                      ? "border-[#005BFF] bg-[#EAF2FF]"
-                      : "border-[#E5E7EB] hover:border-[#005BFF]/30"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-xs text-[#6B7280] mr-2">М{a.moduleNumber} / {a.typeLabel}</span>
-                      <span className="text-sm font-medium text-[#1A1A1B]">{a.title}</span>
-                    </div>
-                    {(a.preLectureVideoUrl || a.theoryTestUrl || a.taskFileUrl) && (
-                      <span className="text-xs text-[#059669] bg-[#D1FAE5] px-2 py-0.5 rounded-full">материалы</span>
-                    )}
-                  </div>
-                  <p className="text-xs text-[#9CA3AF] mt-0.5">
-                    {new Date(a.startsAt).toLocaleString("ru", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
-                  </p>
-                </button>
-              ))}
+              {(() => {
+                // Группируем ДЗ-сессии по модулю, остальные показываем отдельно
+                const hwByModule = new Map<string, TeacherActivity[]>();
+                const others: TeacherActivity[] = [];
+                for (const a of scheduleActivities) {
+                  if (a.typeLabel === "ДЗ-сессия") {
+                    const arr = hwByModule.get(a.moduleId) ?? [];
+                    arr.push(a);
+                    hwByModule.set(a.moduleId, arr);
+                  } else {
+                    others.push(a);
+                  }
+                }
+
+                return (
+                  <>
+                    {others.map(a => {
+                      const isSelected = matActivity?.id === a.id && matHwModuleIds.length === 0;
+                      return (
+                        <button key={a.id} onClick={() => selectMatActivity(a)}
+                          className={`w-full text-left px-3 py-2.5 rounded-lg border transition-colors ${
+                            isSelected ? "border-[#005BFF] bg-[#EAF2FF]" : "border-[#E5E7EB] hover:border-[#005BFF]/30"
+                          }`}>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <span className="text-xs text-[#6B7280] mr-2">М{a.moduleNumber} / {a.typeLabel}</span>
+                              <span className="text-sm font-medium text-[#1A1A1B]">{a.title}</span>
+                            </div>
+                            {(a.preLectureVideoUrl || a.theoryTestUrl || a.taskFileUrl) && (
+                              <span className="text-xs text-[#059669] bg-[#D1FAE5] px-2 py-0.5 rounded-full">материалы</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-[#9CA3AF] mt-0.5">
+                            {new Date(a.startsAt).toLocaleString("ru", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                          </p>
+                        </button>
+                      );
+                    })}
+                    {[...hwByModule.entries()].map(([moduleId, acts]) => {
+                      const first = acts[0];
+                      const isSelected = matHwModuleIds.length > 0 && matHwModuleIds.includes(first.id);
+                      const hasFile = acts.some(a => a.taskFileUrl);
+                      return (
+                        <button key={`hw-${moduleId}`} onClick={() => selectHwModule(acts)}
+                          className={`w-full text-left px-3 py-2.5 rounded-lg border transition-colors ${
+                            isSelected ? "border-[#005BFF] bg-[#EAF2FF]" : "border-[#E5E7EB] hover:border-[#005BFF]/30"
+                          }`}>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <span className="text-xs text-[#6B7280] mr-2">М{first.moduleNumber} / ДЗ-сессии ({acts.length} зан.)</span>
+                              <span className="text-sm font-medium text-[#1A1A1B]">Домашние задания модуля</span>
+                            </div>
+                            {hasFile && (
+                              <span className="text-xs text-[#059669] bg-[#D1FAE5] px-2 py-0.5 rounded-full">файл</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-[#9CA3AF] mt-0.5">
+                            Один файл на все {acts.length} занятий модуля
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </>
+                );
+              })()}
             </div>
           </Card>
 
@@ -663,30 +665,30 @@ export default function AdminPage() {
             <Card>
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <p className="text-sm font-semibold text-[#1A1A1B]">{matActivity.title}</p>
-                  <p className="text-xs text-[#6B7280]">М{matActivity.moduleNumber} / {matActivity.typeLabel}</p>
+                  <p className="text-sm font-semibold text-[#1A1A1B]">
+                    {matHwModuleIds.length > 0 ? `Домашние задания — М${matActivity.moduleNumber}` : matActivity.title}
+                  </p>
+                  <p className="text-xs text-[#6B7280]">
+                    {matHwModuleIds.length > 0
+                      ? `${matHwModuleIds.length} занятий ДЗ-сессии · один файл на весь модуль`
+                      : `М${matActivity.moduleNumber} / ${matActivity.typeLabel}`}
+                  </p>
                 </div>
               </div>
 
               <div className="space-y-4">
                 {/* Pre-lecture video — only for Lecture */}
-                {matActivity.typeLabel === "Лекция" && (
+                {matActivity.typeLabel === "Лекция" && matHwModuleIds.length === 0 && (
                   <div>
                     <Label><span className="flex items-center gap-1.5"><Video size={12} />Видео для просмотра до лекции (YouTube / другая ссылка)</span></Label>
                     <div className="flex gap-2">
                       <div className="relative flex-1">
                         <Link2 size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
-                        <input
-                          type="url"
-                          className={`${INPUT} w-full pl-8`}
-                          placeholder="https://youtube.com/..."
-                          value={matVideoUrl}
-                          onChange={e => setMatVideoUrl(e.target.value)}
-                        />
+                        <input type="url" className={`${INPUT} w-full pl-8`} placeholder="https://youtube.com/..."
+                          value={matVideoUrl} onChange={e => setMatVideoUrl(e.target.value)} />
                       </div>
                       {matVideoUrl && (
-                        <a href={matVideoUrl} target="_blank" rel="noopener noreferrer"
-                          className={`${BTN_GHOST} text-[#005BFF]`}>
+                        <a href={matVideoUrl} target="_blank" rel="noopener noreferrer" className={`${BTN_GHOST} text-[#005BFF]`}>
                           <ExternalLink size={13} />
                         </a>
                       )}
@@ -695,23 +697,17 @@ export default function AdminPage() {
                 )}
 
                 {/* Theory test — only for Lecture */}
-                {matActivity.typeLabel === "Лекция" && (
+                {matActivity.typeLabel === "Лекция" && matHwModuleIds.length === 0 && (
                   <div>
                     <Label><span className="flex items-center gap-1.5"><FileText size={12} />Тест на теорию (Google Forms)</span></Label>
                     <div className="flex gap-2">
                       <div className="relative flex-1">
                         <Link2 size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
-                        <input
-                          type="url"
-                          className={`${INPUT} w-full pl-8`}
-                          placeholder="https://forms.google.com/..."
-                          value={matTestUrl}
-                          onChange={e => setMatTestUrl(e.target.value)}
-                        />
+                        <input type="url" className={`${INPUT} w-full pl-8`} placeholder="https://forms.google.com/..."
+                          value={matTestUrl} onChange={e => setMatTestUrl(e.target.value)} />
                       </div>
                       {matTestUrl && (
-                        <a href={matTestUrl} target="_blank" rel="noopener noreferrer"
-                          className={`${BTN_GHOST} text-[#005BFF]`}>
+                        <a href={matTestUrl} target="_blank" rel="noopener noreferrer" className={`${BTN_GHOST} text-[#005BFF]`}>
                           <ExternalLink size={13} />
                         </a>
                       )}
@@ -719,29 +715,26 @@ export default function AdminPage() {
                   </div>
                 )}
 
-                {/* Task file — for all types */}
+                {/* Task file — for Lecture and КТ; Homework file — for ДЗ-сессия group */}
                 <div>
                   <Label>
                     <span className="flex items-center gap-1.5">
                       <FileText size={12} />
-                      {matActivity.typeLabel === "Лекция" ? "Файл с заданиями для лекции" : "Файл с заданиями КТ"}
-                      {" "}(Google Drive / другая ссылка)
+                      {matHwModuleIds.length > 0
+                        ? "Файл с домашними заданиями (Google Drive / другая ссылка)"
+                        : matActivity.typeLabel === "Лекция"
+                          ? "Файл с заданиями для лекции (Google Drive / другая ссылка)"
+                          : "Файл с заданиями КТ (Google Drive / другая ссылка)"}
                     </span>
                   </Label>
                   <div className="flex gap-2">
                     <div className="relative flex-1">
                       <Link2 size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
-                      <input
-                        type="url"
-                        className={`${INPUT} w-full pl-8`}
-                        placeholder="https://drive.google.com/..."
-                        value={matFileUrl}
-                        onChange={e => setMatFileUrl(e.target.value)}
-                      />
+                      <input type="url" className={`${INPUT} w-full pl-8`} placeholder="https://drive.google.com/..."
+                        value={matFileUrl} onChange={e => setMatFileUrl(e.target.value)} />
                     </div>
                     {matFileUrl && (
-                      <a href={matFileUrl} target="_blank" rel="noopener noreferrer"
-                        className={`${BTN_GHOST} text-[#005BFF]`}>
+                      <a href={matFileUrl} target="_blank" rel="noopener noreferrer" className={`${BTN_GHOST} text-[#005BFF]`}>
                         <ExternalLink size={13} />
                       </a>
                     )}
@@ -761,89 +754,158 @@ export default function AdminPage() {
       {/* ══ TAB: STUDENTS ═════════════════════════════════════════════════════ */}
       {tab === "students" && (
         <div className="space-y-5">
-          {/* Bulk enroll */}
-          {selected && (
-            <Card>
-              <SectionTitle>Массовая запись студентов на курс</SectionTitle>
-              <textarea
-                rows={5}
-                className="w-full px-3 py-2 rounded-lg border border-[#E5E7EB] text-sm outline-none focus:border-[#005BFF] focus:ring-2 focus:ring-[#005BFF]/10 transition resize-none"
-                placeholder={"student1@edu.ru\nstudent2@edu.ru\n(каждый email на новой строке)"}
-                value={bulkEmails}
-                onChange={e => setBulkEmails(e.target.value)}
-              />
-              <div className="flex items-center gap-2 mt-2">
-                <button onClick={enrollBulk} className={BTN_PRIMARY}>Записать студентов</button>
-                <p className="text-xs text-[#9CA3AF]">Email должен совпадать с зарегистрированным в системе</p>
+          {/* Sub-tab switcher */}
+          <div className="flex gap-1 bg-[#F3F4F6] rounded-lg p-1 w-fit">
+            {(["students", "staff"] as StudentsSubTab[]).map(st => (
+              <button key={st} onClick={() => setStudentsSubTab(st)}
+                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  studentsSubTab === st ? "bg-white text-[#005BFF] shadow-sm" : "text-[#6B7280] hover:text-[#1A1A1B]"
+                }`}>
+                {st === "students" ? "Студенты" : "Персонал"}
+              </button>
+            ))}
+          </div>
+
+          {/* ── Sub-tab: STUDENTS ── */}
+          {studentsSubTab === "students" && (
+            <>
+              {/* Bulk enroll */}
+              {selected && (
+                <Card>
+                  <SectionTitle>Массовая запись студентов на курс</SectionTitle>
+                  <textarea
+                    rows={5}
+                    className="w-full px-3 py-2 rounded-lg border border-[#E5E7EB] text-sm outline-none focus:border-[#005BFF] focus:ring-2 focus:ring-[#005BFF]/10 transition resize-none"
+                    placeholder={"student1@edu.ru\nstudent2@edu.ru\n(каждый email на новой строке)"}
+                    value={bulkEmails}
+                    onChange={e => setBulkEmails(e.target.value)}
+                  />
+                  <div className="flex items-center gap-2 mt-2">
+                    <button onClick={enrollBulk} className={BTN_PRIMARY}>Записать студентов</button>
+                    <p className="text-xs text-[#9CA3AF]">Email должен совпадать с зарегистрированным в системе</p>
+                  </div>
+                </Card>
+              )}
+
+              {/* Enrolled students */}
+              {selected && (
+                <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
+                  <div className="px-5 py-3 border-b border-[#E5E7EB] flex items-center justify-between">
+                    <p className="text-sm font-semibold text-[#1A1A1B]">Записаны на курс ({courseStudents.length})</p>
+                    <button onClick={loadStudents} className={BTN_GHOST}><RefreshCw size={13} />Обновить</button>
+                  </div>
+                  {courseStudents.length === 0 ? (
+                    <p className="px-5 py-4 text-sm text-[#9CA3AF]">Нет студентов на этом курсе</p>
+                  ) : (
+                    <div className="divide-y divide-[#F3F4F6]">
+                      {courseStudents.map(u => (
+                        <div key={u.id} className="flex items-center justify-between px-5 py-3">
+                          <div>
+                            <p className="text-sm font-medium text-[#1A1A1B]">{u.displayName}</p>
+                            <p className="text-xs text-[#6B7280]">{u.email}</p>
+                          </div>
+                          <span className="text-xs text-[#9CA3AF] bg-[#F3F4F6] px-2 py-0.5 rounded">{u.role}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* All students */}
+              <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
+                <div className="px-5 py-3 border-b border-[#E5E7EB] flex items-center justify-between">
+                  <p className="text-sm font-semibold text-[#1A1A1B]">
+                    Все студенты ({allUsers.filter(u => u.role === "Student").length})
+                  </p>
+                  <button onClick={loadAllUsers} className={BTN_GHOST}><RefreshCw size={13} />Обновить</button>
+                </div>
+                {allUsers.filter(u => u.role === "Student").length === 0 ? (
+                  <p className="px-5 py-4 text-sm text-[#9CA3AF]">Нет студентов</p>
+                ) : (
+                  <div className="divide-y divide-[#F3F4F6]">
+                    {allUsers.filter(u => u.role === "Student").map(u => (
+                      <div key={u.id} className="flex items-center justify-between px-5 py-3">
+                        <div>
+                          <p className="text-sm font-medium text-[#1A1A1B]">{u.displayName}</p>
+                          <p className="text-xs text-[#6B7280]">{u.email}</p>
+                        </div>
+                        <span className="text-xs bg-[#F3F4F6] text-[#6B7280] px-2 py-0.5 rounded">Студент</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            </Card>
+            </>
           )}
 
-          {/* Enrolled students list */}
-          {selected && (
+          {/* ── Sub-tab: STAFF ── */}
+          {studentsSubTab === "staff" && (
             <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
               <div className="px-5 py-3 border-b border-[#E5E7EB] flex items-center justify-between">
                 <p className="text-sm font-semibold text-[#1A1A1B]">
-                  Записаны на курс ({courseStudents.length})
+                  Преподаватели и ассистенты ({allUsers.filter(u => u.role === "Teacher" || u.role === "Assistant" || u.role === "Admin").length})
                 </p>
-                <button onClick={loadStudents} className={BTN_GHOST}><RefreshCw size={13} />Обновить</button>
+                <button onClick={loadAllUsers} className={BTN_GHOST}><RefreshCw size={13} />Обновить</button>
               </div>
-              {courseStudents.length === 0 ? (
-                <p className="px-5 py-4 text-sm text-[#9CA3AF]">Нет студентов, записанных на этот курс</p>
+              {allUsers.filter(u => u.role === "Teacher" || u.role === "Assistant" || u.role === "Admin").length === 0 ? (
+                <p className="px-5 py-4 text-sm text-[#9CA3AF]">Нет преподавателей или ассистентов</p>
               ) : (
                 <div className="divide-y divide-[#F3F4F6]">
-                  {courseStudents.map(u => (
+                  {allUsers.filter(u => u.role === "Teacher" || u.role === "Assistant" || u.role === "Admin").map(u => (
                     <div key={u.id} className="flex items-center justify-between px-5 py-3">
                       <div>
                         <p className="text-sm font-medium text-[#1A1A1B]">{u.displayName}</p>
                         <p className="text-xs text-[#6B7280]">{u.email}</p>
                       </div>
-                      <span className="text-xs text-[#9CA3AF] bg-[#F3F4F6] px-2 py-0.5 rounded">{u.role}</span>
+                      <div className="flex items-center gap-3">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          u.role === "Teacher" || u.role === "Admin" ? "bg-[#EAF2FF] text-[#005BFF]" :
+                          "bg-[#FEF3C7] text-[#D97706]"
+                        }`}>
+                          {u.role === "Teacher" || u.role === "Admin" ? "Преподаватель" : "Ассистент"}
+                        </span>
+                        <select
+                          defaultValue=""
+                          onChange={e => { if (e.target.value) { setRole(u.id, e.target.value); e.currentTarget.value = ""; } }}
+                          className={`${INPUT} w-36 text-xs`}
+                        >
+                          <option value="">Изменить роль...</option>
+                          <option value="Student">Студент</option>
+                          <option value="Assistant">Ассистент</option>
+                          <option value="Teacher">Преподаватель</option>
+                        </select>
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
-            </div>
-          )}
-
-          {/* All users + role management */}
-          <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
-            <div className="px-5 py-3 border-b border-[#E5E7EB] flex items-center justify-between">
-              <p className="text-sm font-semibold text-[#1A1A1B]">Все пользователи ({allUsers.length})</p>
-              <button onClick={() => admin.listUsers().then(setAllUsers).catch(() => {})} className={BTN_GHOST}><RefreshCw size={13} />Обновить</button>
-            </div>
-            {allUsers.length === 0 ? (
-              <p className="px-5 py-4 text-sm text-[#9CA3AF]">Нет пользователей</p>
-            ) : (
-              <div className="divide-y divide-[#F3F4F6]">
-                {allUsers.map(u => (
-                  <div key={u.id} className="flex items-center justify-between px-5 py-3">
-                    <div>
-                      <p className="text-sm font-medium text-[#1A1A1B]">{u.displayName}</p>
-                      <p className="text-xs text-[#6B7280]">{u.email}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-xs px-2 py-0.5 rounded ${
-                        u.role === "Teacher" || u.role === "Admin" ? "bg-[#EAF2FF] text-[#005BFF]" :
-                        u.role === "Assistant" ? "bg-[#FEF3C7] text-[#D97706]" : "bg-[#F3F4F6] text-[#6B7280]"
-                      }`}>{u.role}</span>
+              {/* Also show all users for role assignment */}
+              <div className="px-5 py-3 border-t border-[#E5E7EB]">
+                <p className="text-xs font-semibold text-[#6B7280] uppercase tracking-wide mb-3">Назначить роль любому пользователю</p>
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {allUsers.filter(u => u.role === "Student").map(u => (
+                    <div key={u.id} className="flex items-center justify-between">
+                      <div>
+                        <span className="text-sm text-[#1A1A1B]">{u.displayName}</span>
+                        <span className="text-xs text-[#9CA3AF] ml-2">{u.email}</span>
+                      </div>
                       <select
                         defaultValue=""
-                        onChange={e => { if (e.target.value) setRole(u.id, e.target.value); e.target.value = ""; }}
-                        className="h-8 px-2 rounded-lg border border-[#E5E7EB] text-xs outline-none focus:border-[#005BFF] bg-white transition"
+                        onChange={e => { if (e.target.value) { setRole(u.id, e.target.value); e.currentTarget.value = ""; } }}
+                        className={`${INPUT} w-36 text-xs`}
                       >
-                        <option value="">Изменить...</option>
-                        <option value="Student">Student</option>
-                        <option value="Assistant">Assistant</option>
-                        <option value="Teacher">Teacher</option>
-                        <option value="Admin">Admin</option>
+                        <option value="">Изменить роль...</option>
+                        <option value="Student">Студент</option>
+                        <option value="Assistant">Ассистент</option>
+                        <option value="Teacher">Преподаватель</option>
                       </select>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -933,7 +995,7 @@ export default function AdminPage() {
                   <button
                     onClick={() => appsActivityId === a.id ? setAppsActivityId(null) : loadApplications(a.id)}
                     className={BTN_GHOST}>
-                    <Users size={12} />Заявки ассистентов
+                    <Users size={12} />Заявки
                   </button>
                 </div>
               </div>
@@ -978,7 +1040,7 @@ export default function AdminPage() {
       {tab === "teams" && selected && (
         <div className="space-y-5">
           <Card>
-            <SectionTitle>Генерация команд</SectionTitle>
+            <SectionTitle>Генерация команд (только для лекций)</SectionTitle>
             <div className="flex flex-wrap gap-3 items-end">
               <div>
                 <Label>Занятие</Label>
@@ -987,9 +1049,9 @@ export default function AdminPage() {
                   value={teamsActivityId ?? ""}
                   onChange={e => { if (e.target.value) pickTeamsActivity(e.target.value); else { setTeamsActivityId(null); setTeams([]); } }}
                 >
-                  <option value="">— выберите занятие —</option>
-                  {scheduleActivities.map(a => (
-                    <option key={a.id} value={a.id}>М{a.moduleNumber} / {a.typeLabel} / {a.title}</option>
+                  <option value="">— выберите лекцию —</option>
+                  {lectureActivities.map(a => (
+                    <option key={a.id} value={a.id}>М{a.moduleNumber} / {a.title}</option>
                   ))}
                 </select>
               </div>
@@ -1002,8 +1064,11 @@ export default function AdminPage() {
               </button>
             </div>
             <p className="text-xs text-[#9CA3AF] mt-2">
-              Алгоритм: змейка по списку записанных студентов. Текущие команды для этого занятия будут заменены.
+              Алгоритм: змейка по списку записанных студентов. Текущие команды заменяются.
             </p>
+            {lectureActivities.length === 0 && !scheduleLoading && (
+              <p className="text-xs text-[#EF4444] mt-2">Нет лекций в расписании. Добавьте занятия типа «Лекция».</p>
+            )}
           </Card>
 
           {teamsLoading && <p className="text-sm text-[#6B7280] animate-pulse">Загрузка команд...</p>}
@@ -1037,7 +1102,7 @@ export default function AdminPage() {
           )}
 
           {!teamsLoading && teamsActivityId && teams.length === 0 && !generating && (
-            <p className="text-sm text-[#9CA3AF]">Нет команд для этого занятия. Нажмите «Сгенерировать».</p>
+            <p className="text-sm text-[#9CA3AF]">Нет команд. Нажмите «Сгенерировать».</p>
           )}
         </div>
       )}
