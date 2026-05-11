@@ -110,7 +110,7 @@ var corsOrigins = (builder.Configuration["CORS_ORIGINS"] ?? "http://localhost:30
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 Console.WriteLine(corsOrigins);
 builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
-    p.WithOrigins(corsOrigins)
+    p.WithOrigins("https://clooo-p4pm.vercel.app")
      .AllowAnyHeader()
      .AllowAnyMethod()
      .AllowCredentials()));
