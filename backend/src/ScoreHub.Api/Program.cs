@@ -105,9 +105,14 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization();
 
-// CORS for local frontend dev
+// CORS: читаем список разрешённых origin из конфига (через запятую).
+// Локально: CORS_ORIGINS=http://localhost:3000
+// Прод:     CORS_ORIGINS=https://your-app.vercel.app,http://localhost:3000
+var corsOrigins = (builder.Configuration["CORS_ORIGINS"] ?? "http://localhost:3000")
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
 builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
-    p.WithOrigins("http://localhost:3000")
+    p.WithOrigins(corsOrigins)
      .AllowAnyHeader()
      .AllowAnyMethod()
      .AllowCredentials()));
