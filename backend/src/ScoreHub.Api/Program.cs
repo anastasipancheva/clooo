@@ -130,7 +130,10 @@ app.UseSwaggerUI(o =>
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
-app.UseHttpsRedirection();
+// CORS must be before authentication/authorization
+// Note: UseHttpsRedirection is intentionally omitted —
+// Railway (and most PaaS) terminate TLS at the reverse proxy;
+// the container only ever receives plain HTTP on port 8080.
 app.UseCors();
 
 app.UseAuthentication();
