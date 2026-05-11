@@ -128,6 +128,8 @@ app.UseSwaggerUI(o =>
     o.DocumentTitle = "ScoreHub API";
 });
 
+app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+
 app.UseHttpsRedirection();
 app.UseCors();
 
