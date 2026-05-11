@@ -308,6 +308,73 @@ public sealed class TeachingController : ApiControllerBase
         return Ok(activities.OrderBy(a => a.StartsAt));
     }
 
+    /// <summary>Удалить модуль вместе со всеми занятиями, наборами задач и задачами.</summary>
+    [HttpDelete("modules/{moduleId:guid}")]
+    public async Task<IActionResult> DeleteModule(Guid moduleId, CancellationToken ct)
+    {
+        var module = await _db.Modules.FirstOrDefaultAsync(m => m.Id == moduleId, ct);
+        if (module is null) return NotFound();
+
+        // SQLite не форсирует FK по умолчанию — удаляем вручную по порядку зависимостей
+        var activityIds = await _db.Activities
+            .Where(a => a.ModuleId == moduleId)
+            .Select(a => a.Id)
+            .ToListAsync(ct);
+
+        if (activityIds.Count > 0)
+        {
+            var taskSetIds = await _db.TaskSets
+                .Where(ts => activityIds.Contains(ts.ActivityId))
+                .Select(ts => ts.Id)
+                .ToListAsync(ct);
+
+            if (taskSetIds.Count > 0)
+            {
+                await _db.TaskAssistants
+                    .Where(t => taskSetIds.Contains(t.TaskItemId))
+                    .ExecuteDeleteAsync(ct);
+                await _db.TaskItems
+                    .Where(t => taskSetIds.Contains(t.TaskSetId))
+                    .ExecuteDeleteAsync(ct);
+                await _db.TaskSets
+                    .Where(ts => taskSetIds.Contains(ts.Id))
+                    .ExecuteDeleteAsync(ct);
+            }
+
+            var teamIds = await _db.Teams
+                .Where(t => activityIds.Contains(t.ActivityId))
+                .Select(t => t.Id)
+                .ToListAsync(ct);
+
+            if (teamIds.Count > 0)
+            {
+                await _db.TeamMembers.Where(m => teamIds.Contains(m.TeamId)).ExecuteDeleteAsync(ct);
+                await _db.TeamAssistants.Where(a => teamIds.Contains(a.TeamId)).ExecuteDeleteAsync(ct);
+                await _db.Teams.Where(t => teamIds.Contains(t.Id)).ExecuteDeleteAsync(ct);
+            }
+
+            await _db.MiniTestAnswers
+                .Where(a => activityIds.Contains(a.ActivityId))
+                .ExecuteDeleteAsync(ct);
+            await _db.MiniTestQuestions
+                .Where(q => activityIds.Contains(q.ActivityId))
+                .ExecuteDeleteAsync(ct);
+            await _db.ActivityAssistants
+                .Where(a => activityIds.Contains(a.ActivityId))
+                .ExecuteDeleteAsync(ct);
+            await _db.AssistantApplications
+                .Where(a => activityIds.Contains(a.ActivityId))
+                .ExecuteDeleteAsync(ct);
+            await _db.Activities
+                .Where(a => activityIds.Contains(a.Id))
+                .ExecuteDeleteAsync(ct);
+        }
+
+        _db.Modules.Remove(module);
+        await _db.SaveChangesAsync(ct);
+        return Ok();
+    }
+
     /// <summary>Удалить курс вместе со всеми модулями, занятиями и задачами.</summary>
     [HttpDelete("courses/{courseId:guid}")]
     public async Task<IActionResult> DeleteCourse(Guid courseId, CancellationToken ct)
@@ -438,7 +505,7 @@ public sealed class TeachingController : ApiControllerBase
     }
 
     public sealed record CreateCourseDto(string Code, string Title, string AcademicYear);
-    public sealed record EnrollBulkDto(IReadOnlyList<string> Emails);
+    public sealed record EnrollBulkDto(List<string> Emails);
     public sealed record AddModuleDto(int Number, string Title, DateTimeOffset StartsAt, DateTimeOffset EndsAt);
     public sealed record AddActivityDto(
         ActivityType Type,

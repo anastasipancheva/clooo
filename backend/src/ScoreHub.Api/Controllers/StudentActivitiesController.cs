@@ -65,8 +65,21 @@ public sealed class StudentActivitiesController : ApiControllerBase
             .AnyAsync(e => e.CourseId == courseId && e.UserId == uid.Value, ct);
         if (exists) return Conflict(new { error = "Already enrolled" });
 
-        _db.CourseEnrollments.Add(new CourseEnrollment { CourseId = courseId, UserId = uid.Value });
-        await _db.SaveChangesAsync(ct);
+        _db.CourseEnrollments.Add(new CourseEnrollment
+        {
+            CourseId = courseId,
+            UserId = uid.Value,
+            EnrolledAt = DateTimeOffset.UtcNow
+        });
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException)
+        {
+            // Race condition: another request enrolled between our check and save
+            return Conflict(new { error = "Already enrolled" });
+        }
         return Ok();
     }
 }

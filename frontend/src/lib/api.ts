@@ -167,6 +167,8 @@ export const teaching = {
     del(`/api/teaching/courses/${courseId}`),
   addModule: (courseId: string, number: number, title: string, startsAt: string, endsAt: string) =>
     post<string>(`/api/teaching/courses/${courseId}/modules`, { number, title, startsAt, endsAt }),
+  deleteModule: (moduleId: string) =>
+    del(`/api/teaching/modules/${moduleId}`),
   addActivity: (moduleId: string, type: number, title: string, startsAt: string, endsAt: string) =>
     post<string>(`/api/teaching/modules/${moduleId}/activities`, { type, title, startsAt, endsAt }),
   addTaskSet: (activityId: string, title: string) =>

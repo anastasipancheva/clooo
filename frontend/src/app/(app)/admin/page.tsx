@@ -203,10 +203,34 @@ export default function AdminPage() {
     const start = new Date(moduleStart);
     const end = new Date(moduleEnd);
     if (end <= start) { toast.error("Дата окончания должна быть позже даты начала"); return; }
+
+    // Validate against course academic year (e.g. "2025/2026" → year range 2025-09-01 .. 2026-08-31)
+    const course = courseList.find(c => c.id === selected);
+    if (course?.academicYear) {
+      const [yStart, yEnd] = course.academicYear.split("/").map(Number);
+      if (!isNaN(yStart) && !isNaN(yEnd)) {
+        const yearStart = new Date(yStart, 8, 1);   // Sep 1 of start year
+        const yearEnd = new Date(yEnd, 7, 31, 23, 59, 59); // Aug 31 of end year
+        if (start < yearStart || end > yearEnd) {
+          toast.error(`Даты модуля должны быть в пределах учебного года ${course.academicYear} (${yearStart.toLocaleDateString("ru")} — ${yearEnd.toLocaleDateString("ru")})`);
+          return;
+        }
+      }
+    }
+
     try {
       await teaching.addModule(selected, parseInt(moduleNum), moduleTitle, start.toISOString(), end.toISOString());
       toast.success("Модуль добавлен");
       setModuleTitle(""); setModuleStart(""); setModuleEnd("");
+      await loadStructure();
+    } catch (e: unknown) { toast.error(e instanceof Error ? e.message : "Ошибка"); }
+  }
+
+  async function deleteModule(moduleId: string, moduleTitle: string) {
+    if (!confirm(`Удалить модуль «${moduleTitle}»? Будут удалены все занятия, задачи и команды этого модуля.`)) return;
+    try {
+      await teaching.deleteModule(moduleId);
+      toast.success("Модуль удалён");
       await loadStructure();
     } catch (e: unknown) { toast.error(e instanceof Error ? e.message : "Ошибка"); }
   }
@@ -369,7 +393,7 @@ export default function AdminPage() {
     { key: "courses", label: "Курсы" },
     { key: "structure", label: "Структура" },
     { key: "materials", label: "Задания" },
-    { key: "students", label: "Студенты" },
+    { key: "students", label: "Студенты/Персонал" },
     { key: "scores", label: "Баллы" },
     { key: "schedule", label: "Расписание" },
     { key: "teams", label: "Команды" },
@@ -490,7 +514,7 @@ export default function AdminPage() {
                         <span className="text-xs font-bold text-[#005BFF] uppercase">М{m.number}</span>
                         <span className="text-sm font-semibold text-[#1A1A1B]">{m.title}</span>
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
                         <span className="text-xs text-[#9CA3AF]">
                           {new Date(m.startsAt).toLocaleDateString("ru")} — {new Date(m.endsAt).toLocaleDateString("ru")}
                         </span>
@@ -505,6 +529,11 @@ export default function AdminPage() {
                               : "bg-[#EAF2FF] text-[#005BFF] hover:bg-[#D1E6FF]"
                           }`}>
                           <PlusCircle size={12} />Занятие
+                        </button>
+                        <button
+                          onClick={() => deleteModule(m.id, m.title)}
+                          className="flex items-center justify-center w-7 h-7 rounded-md text-[#9CA3AF] hover:text-[#EF4444] hover:bg-red-50 transition-colors">
+                          <Trash2 size={13} />
                         </button>
                       </div>
                     </div>
@@ -866,8 +895,9 @@ export default function AdminPage() {
                           {u.role === "Teacher" || u.role === "Admin" ? "Преподаватель" : "Ассистент"}
                         </span>
                         <select
+                          key={`role-staff-${u.id}-${u.role}`}
                           defaultValue=""
-                          onChange={e => { if (e.target.value) { setRole(u.id, e.target.value); e.currentTarget.value = ""; } }}
+                          onChange={e => { if (e.target.value) setRole(u.id, e.target.value); }}
                           className={`${INPUT} w-36 text-xs`}
                         >
                           <option value="">Изменить роль...</option>
@@ -891,8 +921,9 @@ export default function AdminPage() {
                         <span className="text-xs text-[#9CA3AF] ml-2">{u.email}</span>
                       </div>
                       <select
+                        key={`role-student-${u.id}-${u.role}`}
                         defaultValue=""
-                        onChange={e => { if (e.target.value) { setRole(u.id, e.target.value); e.currentTarget.value = ""; } }}
+                        onChange={e => { if (e.target.value) setRole(u.id, e.target.value); }}
                         className={`${INPUT} w-36 text-xs`}
                       >
                         <option value="">Изменить роль...</option>
