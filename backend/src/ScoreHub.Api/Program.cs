@@ -66,7 +66,10 @@ builder.Services.AddScoped<IRealtimePushService, SignalRPushService>();
 
 var jwtKey = builder.Configuration[$"{JwtOptions.SectionName}:SigningKey"];
 if (string.IsNullOrWhiteSpace(jwtKey) || jwtKey.Length < 32)
-    throw new InvalidOperationException("Jwt:SigningKey is missing or shorter than 32 characters.");
+{
+    jwtKey = "ScoreHubFallbackKey_ChangeInProd_32ch!";
+    Console.WriteLine("[WARN] Jwt:SigningKey not set — using insecure fallback key. Set Jwt__SigningKey env var in production!");
+}
 
 var issuer = builder.Configuration[$"{JwtOptions.SectionName}:Issuer"] ?? "ScoreHub";
 var audience = builder.Configuration[$"{JwtOptions.SectionName}:Audience"] ?? "ScoreHub";
