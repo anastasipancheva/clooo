@@ -2,12 +2,11 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
-# Railway BuildKit не может COPY поддиректории — копируем весь контекст целиком
 COPY . .
 
-RUN dotnet restore backend/ScoreHub.sln
+RUN dotnet restore ScoreHub.sln
 
-RUN dotnet publish backend/src/ScoreHub.Api/ScoreHub.Api.csproj \
+RUN dotnet publish src/ScoreHub.Api/ScoreHub.Api.csproj \
     -c Release -o /app/publish
 
 # ── Runtime stage ────────────────────────────────────────────────────────────
