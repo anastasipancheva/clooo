@@ -119,6 +119,16 @@ var app = builder.Build();
 
 await app.MigrateAndSeedAsync();
 
+// Global exception handler — returns JSON { error: "..." } instead of plain-text 500
+app.UseExceptionHandler(errApp => errApp.Run(async ctx =>
+{
+    ctx.Response.StatusCode = 500;
+    ctx.Response.ContentType = "application/json";
+    var ex = ctx.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
+    var msg = ex?.Message ?? "Unexpected error";
+    await ctx.Response.WriteAsJsonAsync(new { error = msg });
+}));
+
 app.UseSwagger();
 app.UseSwaggerUI(o =>
 {

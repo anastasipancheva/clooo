@@ -260,7 +260,16 @@ public sealed class TeachingController : ApiControllerBase
         var course = await _db.Courses.FirstOrDefaultAsync(c => c.Id == courseId, ct);
         if (course is null) return NotFound();
 
-        var emails = dto.Emails.Select(e => e.Trim().ToLowerInvariant()).Distinct().ToList();
+        var emails = dto.Emails
+            .Where(e => e is not null)
+            .Select(e => e.Trim().ToLowerInvariant())
+            .Where(e => e.Length > 0)
+            .Distinct()
+            .ToList();
+
+        if (emails.Count == 0)
+            return BadRequest(new { error = "No valid emails provided." });
+
         var users = await _db.Users.Where(u => emails.Contains(u.Email)).ToListAsync(ct);
 
         var existingList = await _db.CourseEnrollments
@@ -273,10 +282,23 @@ public sealed class TeachingController : ApiControllerBase
         foreach (var user in users)
         {
             if (existing.Contains(user.Id)) continue;
-            _db.CourseEnrollments.Add(new CourseEnrollment { CourseId = courseId, UserId = user.Id });
+            _db.CourseEnrollments.Add(new CourseEnrollment
+            {
+                CourseId = courseId,
+                UserId = user.Id,
+                EnrolledAt = DateTimeOffset.UtcNow
+            });
             added++;
         }
-        await _db.SaveChangesAsync(ct);
+
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
+        {
+            return StatusCode(500, new { error = $"DB error: {ex.InnerException?.Message ?? ex.Message}" });
+        }
 
         return Ok(new { added, notFound = emails.Count - users.Count });
     }

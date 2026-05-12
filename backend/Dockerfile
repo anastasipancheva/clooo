@@ -20,8 +20,10 @@ RUN dotnet publish src/ScoreHub.Api/ScoreHub.Api.csproj \
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app
 
-# SQLite будет писать базу в /data (смонтируй volume на Railway)
-RUN mkdir -p /data
+# SQLite будет писать базу в /data.
+# .NET 8 runtime image запускается от непривилегированного пользователя "app" —
+# нужно явно передать ему владение /data, иначе SQLite не сможет создать файл.
+RUN mkdir -p /data && chown -R app:app /data
 
 COPY --from=build /app/publish .
 
