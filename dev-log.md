@@ -39,3 +39,4 @@
 [2026-05-12 10:10:00] api: ControlPointController - KT endpoints
 [2026-05-12 12:40:00] infra: ControlPointService - KT queue logic
 [2026-05-12 15:20:00] frontend: kt-detail page - KT student flow
+[2026-05-12 17:05:00] frontend: assistant-kt page - KT acceptance flow
