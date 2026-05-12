@@ -1,0 +1,9 @@
+**/bin/
+**/obj/
+**/*.db
+**/*.db-shm
+**/*.db-wal
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+backend/src/**/appsettings.Development.json

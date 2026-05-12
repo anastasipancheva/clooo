@@ -105,12 +105,12 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization();
 
-// CORS: origins прописаны в appsettings.json (ключ CORS_ORIGINS, через запятую)
-var corsOrigins = (builder.Configuration["CORS_ORIGINS"] ?? "http://localhost:3000")
+// CORS: задаётся через env CORS_ORIGINS (через запятую) или appsettings.json
+var corsOrigins = (builder.Configuration["CORS_ORIGINS"] ?? "http://localhost:4200")
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-Console.WriteLine(corsOrigins);
+Console.WriteLine($"[CORS] allowed origins: {string.Join(", ", corsOrigins)}");
 builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
-    p.WithOrigins("https://clooo-p4pm.vercel.app")
+    p.WithOrigins(corsOrigins)
      .AllowAnyHeader()
      .AllowAnyMethod()
      .AllowCredentials()));
