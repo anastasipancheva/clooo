@@ -41,3 +41,4 @@
 [2026-05-12 15:20:00] frontend: kt-detail page - KT student flow
 [2026-05-12 17:05:00] frontend: assistant-kt page - KT acceptance flow
 [2026-05-13 09:45:00] api: ScoringController - scores CRUD
+[2026-05-13 12:10:00] infra: ScoringService - activity score calculation
