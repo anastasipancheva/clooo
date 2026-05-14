@@ -43,3 +43,4 @@
 [2026-05-13 09:45:00] api: ScoringController - scores CRUD
 [2026-05-13 12:10:00] infra: ScoringService - activity score calculation
 [2026-05-13 14:50:00] frontend: scores page - student grade view
+[2026-05-14 10:30:00] api: StudentActivitiesController - student view
