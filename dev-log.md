@@ -45,3 +45,4 @@
 [2026-05-13 14:50:00] frontend: scores page - student grade view
 [2026-05-14 10:30:00] api: StudentActivitiesController - student view
 [2026-05-14 13:00:00] infra: TeamGenerationService - auto team split
+[2026-05-14 15:35:00] frontend: profile page - user info and role
