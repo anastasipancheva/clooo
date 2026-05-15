@@ -48,3 +48,4 @@
 [2026-05-14 15:35:00] frontend: profile page - user info and role
 [2026-05-15 09:55:00] api: HomeworkController - homework submission
 [2026-05-15 12:25:00] infra: HomeworkService - submission and queue logic
+[2026-05-15 15:10:00] frontend: homework page - submit and status
