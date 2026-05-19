@@ -50,3 +50,4 @@
 [2026-05-15 12:25:00] infra: HomeworkService - submission and queue logic
 [2026-05-15 15:10:00] frontend: homework page - submit and status
 [2026-05-19 10:40:00] api: AdminController - user management
+[2026-05-19 13:05:00] infra: CourseTemplateService - save/load templates
