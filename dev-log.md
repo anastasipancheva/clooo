@@ -51,3 +51,4 @@
 [2026-05-15 15:10:00] frontend: homework page - submit and status
 [2026-05-19 10:40:00] api: AdminController - user management
 [2026-05-19 13:05:00] infra: CourseTemplateService - save/load templates
+[2026-05-19 15:45:00] frontend: admin panel - user list and roles
