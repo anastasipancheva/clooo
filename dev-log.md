@@ -53,3 +53,4 @@
 [2026-05-19 13:05:00] infra: CourseTemplateService - save/load templates
 [2026-05-19 15:45:00] frontend: admin panel - user list and roles
 [2026-05-19 17:30:00] frontend: course templates UI
+[2026-05-20 09:20:00] api: NotificationsController - read/unread
