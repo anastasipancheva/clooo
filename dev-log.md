@@ -54,3 +54,4 @@
 [2026-05-19 15:45:00] frontend: admin panel - user list and roles
 [2026-05-19 17:30:00] frontend: course templates UI
 [2026-05-20 09:20:00] api: NotificationsController - read/unread
+[2026-05-20 11:50:00] infra: SignalR hub stub, IRealtimePushService
