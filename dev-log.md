@@ -57,3 +57,4 @@
 [2026-05-20 11:50:00] infra: SignalR hub stub, IRealtimePushService
 [2026-05-20 14:25:00] frontend: signalr.service.ts - real-time updates
 [2026-05-21 10:15:00] api: CourseTemplatesController - template CRUD
+[2026-05-21 12:45:00] fix: activity status transitions validation
