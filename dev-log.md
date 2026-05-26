@@ -59,3 +59,4 @@
 [2026-05-21 10:15:00] api: CourseTemplatesController - template CRUD
 [2026-05-21 12:45:00] fix: activity status transitions validation
 [2026-05-21 16:00:00] frontend: fix routing guard redirect after login
+[2026-05-26 10:50:00] infra: AddCourseEnrollment migration, invite code
