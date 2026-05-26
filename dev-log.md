@@ -62,3 +62,4 @@
 [2026-05-26 10:50:00] infra: AddCourseEnrollment migration, invite code
 [2026-05-26 13:20:00] api: join course by invite code endpoint
 [2026-05-26 15:55:00] frontend: join page - enter invite code
+[2026-05-26 17:40:00] frontend: add join link to dashboard
