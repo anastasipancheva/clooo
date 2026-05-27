@@ -64,3 +64,4 @@
 [2026-05-26 15:55:00] frontend: join page - enter invite code
 [2026-05-26 17:40:00] frontend: add join link to dashboard
 [2026-05-27 09:35:00] api: AssistantStatsController - session stats
+[2026-05-27 12:00:00] fix: team swap log, prevent double assignment
