@@ -123,9 +123,10 @@ public sealed class CourseTemplateService(ScoreHubDbContext db) : ICourseTemplat
                 EndsAt = moduleEnd
             };
 
-            for (int ai = 0; ai < mt.Activities.Count; ai++)
+            var actList = mt.Activities.ToList();
+            for (int ai = 0; ai < actList.Count; ai++)
             {
-                var at = mt.Activities[ai];
+                var at = actList[ai];
                 var actStart = moduleStart.AddDays(ai * 7);
                 var actEnd   = actStart.AddHours(2);
 
@@ -141,7 +142,6 @@ public sealed class CourseTemplateService(ScoreHubDbContext db) : ICourseTemplat
                     TaskFileUrl = at.TaskFileUrl,
                     TheoryTestUrl = at.TheoryTestUrl,
                     LectureBasePoints = 1,
-                    HomeworkBasePoints = 1,
                 };
 
                 if (at.Tasks.Any())
