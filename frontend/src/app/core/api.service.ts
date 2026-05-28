@@ -6,7 +6,7 @@ import {
   Course, StudentScore, StudentActivity, Notification, MiniTestDto,
   HelpRequest, TeamSubmission, KtSlot, KtQueueEntry,
   AssistantApplicationDto, TeacherActivity, ActivityTeam, AssistantSession,
-  CourseStructure, User
+  CourseStructure, User, TemplateSummary, TemplateView
 } from './models';
 
 @Injectable({ providedIn: 'root' })
@@ -137,6 +137,15 @@ export class ApiService {
     return this.post<{ added: number; notFound: number }>(`/api/teaching/courses/${courseId}/enroll-bulk`, { emails });
   }
   getCourseActivities(courseId: string) { return this.get<TeacherActivity[]>(`/api/teaching/courses/${courseId}/activities`); }
+  // Course Templates
+  listTemplates() { return this.get<TemplateSummary[]>('/api/templates'); }
+  getTemplate(id: string) { return this.get<TemplateView>(`/api/templates/${id}`); }
+  createTemplate(body: object) { return this.post<{ id: string }>('/api/templates', body); }
+  deleteTemplate(id: string) { return this.delete<void>(`/api/templates/${id}`); }
+  applyTemplate(id: string, body: { courseCode: string; courseTitle: string; academicYear: string }) {
+    return this.post<{ courseId: string }>(`/api/templates/${id}/apply`, body);
+  }
+
   autoGenerate(activityId: string, teamSize: number) {
     return this.post<{ teamCount: number; studentCount: number; teams: ActivityTeam[] }>(
       `/api/teaching/activities/${activityId}/teams/auto-generate`, { teamSize });

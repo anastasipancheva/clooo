@@ -82,3 +82,19 @@ export interface User {
 }
 
 export interface NotificationPayload { type: string; title: string; body?: string; createdAt: string; }
+
+// ── Course Templates ──────────────────────────────────────────────────────────
+export interface TemplateSummary {
+  id: string; title: string; description?: string;
+  moduleCount: number; activityCount: number; createdAt: string;
+}
+export interface TemplateTaskView   { id: string; code: string; title: string; points: number; }
+export interface TemplateActivityView {
+  id: string; type: number; title: string; taskFileUrl?: string; theoryTestUrl?: string;
+  tasks: TemplateTaskView[];
+}
+export interface TemplateModuleView { id: string; number: number; title: string; activities: TemplateActivityView[]; }
+export interface TemplateView {
+  id: string; title: string; description?: string; createdAt: string;
+  modules: TemplateModuleView[];
+}

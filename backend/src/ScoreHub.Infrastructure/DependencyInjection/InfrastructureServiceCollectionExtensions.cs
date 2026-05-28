@@ -32,6 +32,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IHomeworkService, HomeworkService>();
         services.AddScoped<IScoringService, ScoringService>();
         services.AddScoped<ITeamGenerationService, TeamGenerationService>();
+        services.AddScoped<ICourseTemplateService, CourseTemplateService>();
 
         return services;
     }

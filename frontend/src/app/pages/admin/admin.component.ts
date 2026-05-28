@@ -5,10 +5,10 @@ import { ApiService } from '../../core/api.service';
 import { ToastService } from '../../core/toast.service';
 import {
   Course, StudentScore, TeacherActivity, CourseStructure,
-  AssistantApplicationDto, ActivityTeam,
+  AssistantApplicationDto, ActivityTeam, TemplateSummary, TemplateView, TemplateModuleView,
 } from '../../core/models';
 
-type Tab = 'courses' | 'structure' | 'materials' | 'students' | 'scores' | 'schedule' | 'teams';
+type Tab = 'courses' | 'structure' | 'materials' | 'students' | 'scores' | 'schedule' | 'teams' | 'templates';
 type StudentsSubTab = 'students' | 'staff';
 
 const INPUT = 'h-9 px-3 rounded-lg border border-[#E5E7EB] text-sm outline-none focus:border-[#005BFF] focus:ring-2 focus:ring-[#005BFF]/10 transition bg-white';
@@ -40,8 +40,8 @@ function defaultAcademicYear() {
         }
       </div>
 
-      <!-- Course selector (for non-courses tabs) -->
-      @if (tab !== 'courses') {
+      <!-- Course selector (for non-courses and non-templates tabs) -->
+      @if (tab !== 'courses' && tab !== 'templates') {
         <div class="bg-white rounded-xl border border-[#E5E7EB] p-5">
           <p class="text-xs font-medium text-[#6B7280] uppercase tracking-wide mb-2">Выберите курс</p>
           <div class="flex flex-wrap gap-2">
@@ -659,6 +659,158 @@ function defaultAcademicYear() {
       @if (tab === 'teams' && !selected) {
         <p class="text-sm text-[#9CA3AF]">Выберите курс выше.</p>
       }
+
+      <!-- ── TEMPLATES TAB ─────────────────────────────────────────────── -->
+      @if (tab === 'templates') {
+        <div class="space-y-6">
+
+          <!-- Create template form -->
+          <div class="bg-white rounded-xl border border-[#E5E7EB] p-5 space-y-4">
+            <p class="text-sm font-semibold text-[#1A1A1B]">Создать шаблон предмета</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs text-[#6B7280] mb-1">Название шаблона *</label>
+                <input [class]="INPUT + ' w-full'" [(ngModel)]="tplTitle" placeholder="напр. Веб-разработка 2025" />
+              </div>
+              <div>
+                <label class="block text-xs text-[#6B7280] mb-1">Описание</label>
+                <input [class]="INPUT + ' w-full'" [(ngModel)]="tplDesc" placeholder="необязательно" />
+              </div>
+            </div>
+
+            <!-- Modules editor -->
+            <div class="space-y-3">
+              <div class="flex items-center justify-between">
+                <p class="text-xs font-semibold text-[#6B7280] uppercase tracking-wide">Модули</p>
+                <button (click)="tplAddModule()" [class]="BTN_GHOST">+ Модуль</button>
+              </div>
+              @for (m of tplModules; track $index; let mi = $index) {
+                <div class="border border-[#E5E7EB] rounded-xl p-4 space-y-3 bg-[#FAFAFA]">
+                  <div class="flex items-center gap-3">
+                    <span class="text-xs font-bold text-[#6B7280] w-6">М{{ mi + 1 }}</span>
+                    <input [class]="INPUT + ' flex-1'" [(ngModel)]="m.title" placeholder="Название модуля" />
+                    <button (click)="tplRemoveModule(mi)" class="text-[#EF4444] text-xs hover:underline">✕</button>
+                  </div>
+
+                  <!-- Activities in this module -->
+                  <div class="space-y-2 pl-4">
+                    @for (a of m.activities; track $index; let ai = $index) {
+                      <div class="flex items-center gap-2 flex-wrap">
+                        <select [class]="INPUT + ' w-28'" [(ngModel)]="a.type">
+                          <option value="0">Лекция</option>
+                          <option value="1">Практика</option>
+                          <option value="2">КТ</option>
+                          <option value="3">ДЗ</option>
+                        </select>
+                        <input [class]="INPUT + ' flex-1 min-w-32'" [(ngModel)]="a.title" placeholder="Название занятия" />
+                        <button (click)="tplRemoveActivity(mi, ai)" class="text-[#EF4444] text-xs">✕</button>
+                      </div>
+                    }
+                    <button (click)="tplAddActivity(mi)" class="text-xs text-[#005BFF] hover:underline">+ занятие</button>
+                  </div>
+                </div>
+              }
+              @if (tplModules.length === 0) {
+                <p class="text-xs text-[#9CA3AF]">Нет модулей. Нажмите «+ Модуль».</p>
+              }
+            </div>
+
+            <button (click)="saveTemplate()" [disabled]="tplSaving || !tplTitle" [class]="BTN_PRIMARY">
+              {{ tplSaving ? '⏳ Сохранение...' : '💾 Сохранить шаблон' }}
+            </button>
+          </div>
+
+          <!-- Templates list -->
+          @if (templatesLoading) { <p class="text-sm text-[#6B7280] animate-pulse">Загрузка шаблонов...</p> }
+
+          @if (!templatesLoading && templates.length === 0) {
+            <p class="text-sm text-[#9CA3AF]">Нет шаблонов. Создайте первый выше.</p>
+          }
+
+          @for (tpl of templates; track tpl.id) {
+            <div class="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
+              <div class="px-5 py-4 flex items-start justify-between gap-3">
+                <div>
+                  <p class="text-sm font-semibold text-[#1A1A1B]">{{ tpl.title }}</p>
+                  @if (tpl.description) { <p class="text-xs text-[#6B7280] mt-0.5">{{ tpl.description }}</p> }
+                  <p class="text-xs text-[#9CA3AF] mt-1">
+                    {{ tpl.moduleCount }} модул. · {{ tpl.activityCount }} занятий ·
+                    создан {{ fmtDateShort(tpl.createdAt) }}
+                  </p>
+                </div>
+                <div class="flex gap-2 flex-shrink-0">
+                  <button (click)="viewTemplate(tpl.id)"
+                    class="h-8 px-3 rounded-lg bg-[#EAF2FF] text-[#005BFF] text-xs font-medium hover:bg-[#D1E6FF] transition-colors">
+                    {{ expandedTpl === tpl.id ? '▲ Скрыть' : '▼ Структура' }}
+                  </button>
+                  <button (click)="openApplyDialog(tpl)" [class]="BTN_PRIMARY + ' h-8 text-xs'">
+                    ▶ Применить
+                  </button>
+                  <button (click)="deleteTemplate(tpl)" class="h-8 px-3 rounded-lg border border-[#FCA5A5] text-[#EF4444] text-xs hover:bg-[#FEF2F2] transition-colors">
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              <!-- Expanded template structure -->
+              @if (expandedTpl === tpl.id && tplDetail) {
+                <div class="border-t border-[#F3F4F6] px-5 py-4 space-y-3">
+                  @for (m of tplDetail.modules; track m.id) {
+                    <div>
+                      <p class="text-xs font-semibold text-[#1A1A1B] mb-1">М{{ m.number }} — {{ m.title }}</p>
+                      <div class="space-y-1 pl-3">
+                        @for (a of m.activities; track a.id) {
+                          <div class="flex items-center gap-2">
+                            <span class="text-xs px-2 py-0.5 rounded-md font-medium"
+                              [class]="actTypeClass(a.type)">{{ actTypeLabelNum(a.type) }}</span>
+                            <span class="text-xs text-[#1A1A1B]">{{ a.title }}</span>
+                            @if (a.tasks.length > 0) {
+                              <span class="text-xs text-[#6B7280]">({{ a.tasks.length }} задач)</span>
+                            }
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          }
+
+          <!-- Apply template dialog -->
+          @if (applyTpl) {
+            <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" (click)="applyTpl = null">
+              <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl space-y-4" (click)="$event.stopPropagation()">
+                <p class="font-semibold text-[#1A1A1B]">Применить шаблон</p>
+                <p class="text-sm text-[#6B7280]">Шаблон: <strong>{{ applyTpl.title }}</strong></p>
+                <div class="space-y-3">
+                  <div>
+                    <label class="block text-xs text-[#6B7280] mb-1">Код курса *</label>
+                    <input [class]="INPUT + ' w-full'" [(ngModel)]="applyCode" placeholder="напр. WEB-25" />
+                  </div>
+                  <div>
+                    <label class="block text-xs text-[#6B7280] mb-1">Название курса *</label>
+                    <input [class]="INPUT + ' w-full'" [(ngModel)]="applyTitle" placeholder="Веб-разработка 2025" />
+                  </div>
+                  <div>
+                    <label class="block text-xs text-[#6B7280] mb-1">Учебный год *</label>
+                    <input [class]="INPUT + ' w-full'" [(ngModel)]="applyYear" placeholder="2025/2026" />
+                  </div>
+                </div>
+                <p class="text-xs text-[#6B7280]">
+                  Будет создан курс с готовой структурой. Даты занятий — от сегодня, по 2 недели на модуль. Скорректируйте их в разделе «Структура».
+                </p>
+                <div class="flex gap-2 pt-1">
+                  <button (click)="applyTpl = null" [class]="BTN_GHOST + ' flex-1'">Отмена</button>
+                  <button (click)="applyTemplate()" [disabled]="applying || !applyCode || !applyTitle" [class]="BTN_PRIMARY + ' flex-1'">
+                    {{ applying ? '⏳...' : '▶ Создать курс' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+      }
     </div>
   `
 })
@@ -714,6 +866,18 @@ export class AdminComponent implements OnInit {
   teamsLoading = false;
   generating = false;
 
+  // Templates tab
+  templates: TemplateSummary[] = [];
+  templatesLoading = false;
+  tplTitle = ''; tplDesc = '';
+  tplModules: { title: string; activities: { type: string; title: string }[] }[] = [];
+  tplSaving = false;
+  expandedTpl: string | null = null;
+  tplDetail: TemplateView | null = null;
+  applyTpl: TemplateSummary | null = null;
+  applyCode = ''; applyTitle = ''; applyYear = defaultAcademicYear();
+  applying = false;
+
   readonly tabs: { key: Tab; label: string }[] = [
     { key: 'courses', label: 'Курсы' },
     { key: 'structure', label: 'Структура' },
@@ -722,6 +886,7 @@ export class AdminComponent implements OnInit {
     { key: 'scores', label: 'Баллы' },
     { key: 'schedule', label: 'Расписание' },
     { key: 'teams', label: 'Команды' },
+    { key: 'templates', label: '📋 Шаблоны' },
   ];
 
   get allStudents() { return this.allUsers.filter(u => u.role === 'Student'); }
@@ -974,8 +1139,97 @@ export class AdminComponent implements OnInit {
   setTab(t: Tab) {
     this.tab = t;
     if (t === 'students') this.loadAllUsers();
+    if (t === 'templates') this.loadTemplates();
     this.onCourseChange();
   }
+
+  // ── Template methods ──────────────────────────────────────────────────────
+  async loadTemplates() {
+    this.templatesLoading = true;
+    try { this.templates = await this.api.listTemplates(); }
+    catch { this.templates = []; }
+    finally { this.templatesLoading = false; }
+  }
+
+  tplAddModule() {
+    this.tplModules.push({ title: '', activities: [] });
+  }
+  tplRemoveModule(i: number) { this.tplModules.splice(i, 1); }
+  tplAddActivity(mi: number) { this.tplModules[mi].activities.push({ type: '0', title: '' }); }
+  tplRemoveActivity(mi: number, ai: number) { this.tplModules[mi].activities.splice(ai, 1); }
+
+  async saveTemplate() {
+    if (!this.tplTitle) { this.toast.error('Введите название шаблона'); return; }
+    this.tplSaving = true;
+    try {
+      const body = {
+        title: this.tplTitle,
+        description: this.tplDesc || null,
+        modules: this.tplModules.map((m, i) => ({
+          number: i + 1,
+          title: m.title || `Модуль ${i + 1}`,
+          activities: m.activities.map(a => ({
+            type: parseInt(a.type),
+            title: a.title || 'Занятие',
+            taskFileUrl: null, theoryTestUrl: null,
+            tasks: []
+          }))
+        }))
+      };
+      await this.api.createTemplate(body);
+      this.toast.success('Шаблон сохранён');
+      this.tplTitle = ''; this.tplDesc = ''; this.tplModules = [];
+      await this.loadTemplates();
+    } catch (e: unknown) { this.toast.error(e instanceof Error ? e.message : 'Ошибка'); }
+    finally { this.tplSaving = false; }
+  }
+
+  async viewTemplate(id: string) {
+    if (this.expandedTpl === id) { this.expandedTpl = null; this.tplDetail = null; return; }
+    try {
+      this.tplDetail = await this.api.getTemplate(id);
+      this.expandedTpl = id;
+    } catch { this.toast.error('Ошибка загрузки шаблона'); }
+  }
+
+  openApplyDialog(tpl: TemplateSummary) {
+    this.applyTpl = tpl;
+    this.applyCode = ''; this.applyTitle = tpl.title; this.applyYear = defaultAcademicYear();
+  }
+
+  async applyTemplate() {
+    if (!this.applyTpl || !this.applyCode || !this.applyTitle) return;
+    this.applying = true;
+    try {
+      const { courseId } = await this.api.applyTemplate(this.applyTpl.id, {
+        courseCode: this.applyCode, courseTitle: this.applyTitle, academicYear: this.applyYear
+      });
+      this.toast.success('Курс создан из шаблона!');
+      this.applyTpl = null;
+      await this.loadCourses();
+      this.selected = courseId;
+    } catch (e: unknown) { this.toast.error(e instanceof Error ? e.message : 'Ошибка'); }
+    finally { this.applying = false; }
+  }
+
+  async deleteTemplate(tpl: TemplateSummary) {
+    if (!confirm(`Удалить шаблон «${tpl.title}»?`)) return;
+    try {
+      await this.api.deleteTemplate(tpl.id);
+      this.toast.success('Шаблон удалён');
+      if (this.expandedTpl === tpl.id) { this.expandedTpl = null; this.tplDetail = null; }
+      await this.loadTemplates();
+    } catch { this.toast.error('Ошибка удаления'); }
+  }
+
+  actTypeClass(type: number) {
+    const map: Record<number, string> = { 0: 'bg-[#EAF2FF] text-[#005BFF]', 1: 'bg-[#D1FAE5] text-[#059669]', 2: 'bg-[#FEF3C7] text-[#D97706]', 3: 'bg-[#F3E8FF] text-[#7C3AED]' };
+    return map[type] ?? 'bg-[#F3F4F6] text-[#6B7280]';
+  }
+  actTypeLabelNum(type: number) {
+    return ['Лекция', 'Практика', 'КТ', 'ДЗ'][type] ?? 'Занятие';
+  }
+  fmtDateShort(d: string) { return new Date(d).toLocaleDateString('ru', { day: 'numeric', month: 'short', year: 'numeric' }); }
 
   modScore(s: StudentScore, n: number) { return s.modules.find(m => m.moduleNumber === n)?.moduleScore ?? 0; }
   markColor(mark: string) {

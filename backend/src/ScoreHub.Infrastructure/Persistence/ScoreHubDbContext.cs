@@ -43,6 +43,11 @@ public sealed class ScoreHubDbContext : DbContext
 
     public DbSet<AssistantApplication> AssistantApplications => Set<AssistantApplication>();
 
+    public DbSet<CourseTemplate> CourseTemplates => Set<CourseTemplate>();
+    public DbSet<ModuleTemplate> ModuleTemplates => Set<ModuleTemplate>();
+    public DbSet<ActivityTemplate> ActivityTemplates => Set<ActivityTemplate>();
+    public DbSet<TaskTemplate> TaskTemplates => Set<TaskTemplate>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
