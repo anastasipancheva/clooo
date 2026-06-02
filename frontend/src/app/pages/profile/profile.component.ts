@@ -4,13 +4,12 @@ import { AuthService } from '../../core/auth.service';
 import { ToastService } from '../../core/toast.service';
 
 const ROLE_LABEL: Record<string, string> = {
-  Student: 'Студент', Assistant: 'Ассистент', Teacher: 'Преподаватель', Admin: 'Администратор',
+  Student: 'Студент', Assistant: 'Ассистент', Teacher: 'Преподаватель',
 };
 const ROLE_COLOR: Record<string, string> = {
   Student: 'bg-[#F3F4F6] text-[#6B7280]',
   Assistant: 'bg-[#FEF3C7] text-[#D97706]',
   Teacher: 'bg-[#EAF2FF] text-[#005BFF]',
-  Admin: 'bg-[#EAF2FF] text-[#005BFF]',
 };
 
 @Component({
@@ -24,7 +23,7 @@ const ROLE_COLOR: Record<string, string> = {
         <div class="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
           <div class="bg-[#EAF2FF] px-6 py-8 flex items-center gap-4">
             <div class="w-14 h-14 rounded-full bg-[#005BFF] flex items-center justify-center flex-shrink-0">
-              <span class="text-white text-xl font-bold">{{ user.displayName[0]?.toUpperCase() }}</span>
+              <span class="text-white text-xl font-bold">{{ user.displayName[0].toUpperCase() }}</span>
             </div>
             <div>
               <p class="text-base font-semibold text-[#1A1A1B]">{{ user.displayName }}</p>

@@ -1,4 +1,4 @@
-export interface Course { id: string; code: string; title: string; academicYear: string; }
+export interface Course { id: string; code: string; title: string; academicYear: string; isEnrolled?: boolean; }
 
 export interface StudentScore {
   studentId: string; displayName: string;
@@ -83,6 +83,17 @@ export interface User {
 
 export interface NotificationPayload { type: string; title: string; body?: string; createdAt: string; }
 
+export interface AssistantOwnApplication {
+  id: string; activityId: string; activityTitle: string; activityStatus: string;
+  status: string; message?: string; appliedAt: string; reviewedAt?: string;
+  moduleTitle: string; courseCode: string;
+}
+
+export interface MyTeamDto {
+  id: string; name: string;
+  tasks: { id: string; code: string; title: string; points: number; status: string }[];
+}
+
 // ── Course Templates ──────────────────────────────────────────────────────────
 export interface TemplateSummary {
   id: string; title: string; description?: string;
@@ -93,7 +104,7 @@ export interface TemplateActivityView {
   id: string; type: number; title: string; taskFileUrl?: string; theoryTestUrl?: string;
   tasks: TemplateTaskView[];
 }
-export interface TemplateModuleView { id: string; number: number; title: string; activities: TemplateActivityView[]; }
+export interface TemplateModuleView { id: string; number: number; title: string; activities: TemplateActivityView[]; startsAt?: string; endsAt?: string; }
 export interface TemplateView {
   id: string; title: string; description?: string; createdAt: string;
   modules: TemplateModuleView[];

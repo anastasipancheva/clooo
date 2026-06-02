@@ -16,6 +16,8 @@ public sealed class ModuleTemplate
     public Guid CourseTemplateId { get; set; }
     public int Number { get; set; }
     public string Title { get; set; } = "";
+    public DateTimeOffset? StartsAt { get; set; }
+    public DateTimeOffset? EndsAt { get; set; }
 
     public CourseTemplate CourseTemplate { get; set; } = null!;
     public ICollection<ActivityTemplate> Activities { get; set; } = new List<ActivityTemplate>();

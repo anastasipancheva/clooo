@@ -29,17 +29,26 @@ public sealed class CoursesController : ControllerBase
         }
     }
 
-    /// <summary>Список всех курсов: Id, Code, Title, AcademicYear.</summary>
+    /// <summary>Список всех курсов: Id, Code, Title, AcademicYear + isEnrolled для текущего пользователя.</summary>
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<object>>> List(CancellationToken ct)
     {
+        var uid = CurrentUserId;
+
+        var enrolledIds = uid.HasValue
+            ? await _db.CourseEnrollments
+                .Where(e => e.UserId == uid.Value)
+                .Select(e => e.CourseId)
+                .ToListAsync(ct)
+            : new List<Guid>();
+
         var list = await _db.Courses
             .AsNoTracking()
             .OrderBy(c => c.Code)
             .Select(c => new { c.Id, c.Code, c.Title, c.AcademicYear })
             .ToListAsync(ct);
 
-        return Ok(list);
+        return Ok(list.Select(c => new { c.Id, c.Code, c.Title, c.AcademicYear, IsEnrolled = enrolledIds.Contains(c.Id) }));
     }
 
     /// <summary>Список студентов, записанных на курс.</summary>

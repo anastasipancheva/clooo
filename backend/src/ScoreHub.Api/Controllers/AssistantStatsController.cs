@@ -15,6 +15,34 @@ public sealed class AssistantStatsController : ApiControllerBase
     private readonly ScoreHubDbContext _db;
     public AssistantStatsController(ScoreHubDbContext db) { _db = db; }
 
+    /// <summary>Все заявки текущего ассистента (Pending/Approved/Rejected).</summary>
+    [HttpGet("my-applications")]
+    public async Task<IActionResult> MyApplications(CancellationToken ct)
+    {
+        var uid = CurrentUserId;
+        if (uid is null) return Unauthorized();
+
+        var apps = await _db.AssistantApplications
+            .AsNoTracking()
+            .Where(a => a.AssistantId == uid.Value)
+            .Select(a => new
+            {
+                a.Id,
+                a.ActivityId,
+                ActivityTitle = a.Activity.Title,
+                ActivityStatus = a.Activity.Status.ToString(),
+                a.Status,
+                a.Message,
+                a.AppliedAt,
+                a.ReviewedAt,
+                ModuleTitle = a.Activity.Module.Title,
+                CourseCode = a.Activity.Module.Course.Code,
+            })
+            .ToListAsync(ct);
+
+        return Ok(apps);
+    }
+
     /// <summary>Все одобренные заявки текущего ассистента с данными о модуле и курсе.</summary>
     [HttpGet("my-sessions")]
     public async Task<IActionResult> MySessions(CancellationToken ct)

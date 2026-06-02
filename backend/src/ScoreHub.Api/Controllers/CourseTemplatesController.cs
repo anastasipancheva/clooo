@@ -5,6 +5,7 @@ using ScoreHub.Domain.Auth;
 
 namespace ScoreHub.Api.Controllers;
 
+[ApiController]
 [Authorize(Roles = AppRoles.Teacher + "," + AppRoles.Admin)]
 public class CourseTemplatesController(ICourseTemplateService svc) : ApiControllerBase
 {

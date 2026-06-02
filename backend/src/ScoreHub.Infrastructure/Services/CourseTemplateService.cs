@@ -36,7 +36,9 @@ public sealed class CourseTemplateService(ScoreHubDbContext db) : ICourseTemplat
                     m.Activities.Select(a =>
                         new TemplateActivityView(a.Id, a.Type, a.Title, a.TaskFileUrl, a.TheoryTestUrl,
                             a.Tasks.Select(tk => new TemplateTaskView(tk.Id, tk.Code, tk.Title, tk.Points)).ToList())
-                    ).ToList())
+                    ).ToList(),
+                    m.StartsAt,
+                    m.EndsAt)
             ).ToList());
     }
 
@@ -53,6 +55,8 @@ public sealed class CourseTemplateService(ScoreHubDbContext db) : ICourseTemplat
                 Id = Guid.NewGuid(),
                 Number = m.Number,
                 Title = m.Title,
+                StartsAt = m.StartsAt,
+                EndsAt = m.EndsAt,
                 Activities = m.Activities.Select(a => new ActivityTemplate
                 {
                     Id = Guid.NewGuid(),
@@ -110,8 +114,9 @@ public sealed class CourseTemplateService(ScoreHubDbContext db) : ICourseTemplat
         for (int mi = 0; mi < modules.Count; mi++)
         {
             var mt = modules[mi];
-            var moduleStart = now.AddDays(mi * 14);
-            var moduleEnd   = moduleStart.AddDays(13);
+            // Use template dates if set; otherwise auto-calculate (2 weeks per module)
+            var moduleStart = mt.StartsAt ?? now.AddDays(mi * 14);
+            var moduleEnd   = mt.EndsAt   ?? moduleStart.AddDays(13);
 
             var module = new Module
             {

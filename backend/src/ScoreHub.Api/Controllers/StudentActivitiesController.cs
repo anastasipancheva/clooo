@@ -22,15 +22,40 @@ public sealed class StudentActivitiesController : ApiControllerBase
         var uid = CurrentUserId;
         if (uid is null) return Unauthorized();
 
+        var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == uid.Value, ct);
+        if (user is null) return Unauthorized();
+
+        var isAssistant = user.Role == Domain.Enums.UserRole.Assistant;
+
         var courseIds = await _db.CourseEnrollments
             .Where(e => e.UserId == uid.Value)
             .Select(e => e.CourseId)
             .ToListAsync(ct);
 
-        var activities = await _db.Activities
-            .AsNoTracking()
-            .Where(a => courseIds.Contains(a.Module.CourseId)
-                && a.Status != ActivityStatus.Finished)
+        // For assistants: Active activities must have an approved ActivityAssistant record.
+        // Scheduled activities are shown so they can apply; Active without approval are hidden.
+        IQueryable<Domain.Entities.Activity> query = _db.Activities.AsNoTracking();
+
+        if (isAssistant)
+        {
+            var approvedActivityIds = await _db.ActivityAssistants
+                .Where(aa => aa.AssistantId == uid.Value)
+                .Select(aa => aa.ActivityId)
+                .ToListAsync(ct);
+
+            query = query.Where(a =>
+                courseIds.Contains(a.Module.CourseId)
+                && a.Status != ActivityStatus.Finished
+                && (a.Status == ActivityStatus.Scheduled || approvedActivityIds.Contains(a.Id)));
+        }
+        else
+        {
+            query = query.Where(a =>
+                courseIds.Contains(a.Module.CourseId)
+                && a.Status != ActivityStatus.Finished);
+        }
+
+        var activities = await query
             .Select(a => new {
                 a.Id,
                 a.Title,

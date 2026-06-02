@@ -73,6 +73,17 @@ public sealed class AssistantApplicationController : ApiControllerBase
                 .AnyAsync(aa => aa.ActivityId == activityId && aa.AssistantId == app.AssistantId, ct);
             if (!alreadyActive)
                 _db.ActivityAssistants.Add(new ActivityAssistant { ActivityId = activityId, AssistantId = app.AssistantId });
+
+            // Auto-assign assistant to teams that have no assistant yet (1 assistant per team)
+            var teamsWithoutAssistant = await _db.Teams
+                .Include(t => t.Assistants)
+                .Where(t => t.ActivityId == activityId && !t.Assistants.Any())
+                .ToListAsync(ct);
+
+            foreach (var team in teamsWithoutAssistant)
+            {
+                team.Assistants.Add(new Domain.Entities.TeamAssistant { AssistantId = app.AssistantId });
+            }
         }
 
         await _db.SaveChangesAsync(ct);

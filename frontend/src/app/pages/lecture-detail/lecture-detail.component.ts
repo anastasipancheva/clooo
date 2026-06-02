@@ -5,7 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/api.service';
 import { SignalRService } from '../../core/signalr.service';
 import { ToastService } from '../../core/toast.service';
-import { MiniTestDto } from '../../core/models';
+import { MiniTestDto, MyTeamDto } from '../../core/models';
 import { Subscription } from 'rxjs';
 
 @Component({
@@ -61,46 +61,57 @@ import { Subscription } from 'rxjs';
       }
 
       <!-- Team actions -->
-      <div class="bg-white rounded-xl border border-[#E5E7EB] p-5">
-        <p class="text-sm font-semibold text-[#1A1A1B] mb-1">Команда</p>
-        <p class="text-xs text-[#6B7280] mb-4">
-          Вызовите ассистента на консультацию или отметьте задачу готовой.
-        </p>
-        <button (click)="callAssistant()" [disabled]="!teamId"
-          class="h-10 px-5 rounded-lg border border-[#E5E7EB] text-sm text-[#6B7280] font-medium hover:border-[#005BFF] hover:text-[#005BFF] disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-          Позвать ассистента
-        </button>
-        @if (!teamId) {
-          <p class="text-xs text-[#9CA3AF] mt-2">
-            teamId будет подтянут через API курса (GET /api/activities/&#123;activityId&#125;/my-team).
-          </p>
-        }
-      </div>
+      @if (team) {
+        <div class="bg-white rounded-xl border border-[#E5E7EB] p-5 space-y-4">
+          <div>
+            <p class="text-sm font-semibold text-[#1A1A1B] mb-1">{{ team.name }}</p>
+            <p class="text-xs text-[#6B7280] mb-3">
+              Вызовите ассистента на консультацию или отметьте задачу готовой.
+            </p>
+            <button (click)="callAssistant()"
+              class="h-10 px-5 rounded-lg border border-[#E5E7EB] text-sm text-[#6B7280] font-medium hover:border-[#005BFF] hover:text-[#005BFF] transition-colors">
+              📢 Позвать ассистента
+            </button>
+          </div>
 
-      <!-- Tasks -->
-      @if (tasks.length > 0) {
-        <div class="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
-          <div class="px-5 py-4 border-b border-[#E5E7EB]">
-            <p class="text-sm font-semibold text-[#1A1A1B]">Задачи</p>
-          </div>
-          <div class="divide-y divide-[#F3F4F6]">
-            @for (t of tasks; track t.id) {
-              <div class="flex items-center justify-between px-5 py-3">
-                <span class="text-sm font-mono font-medium text-[#1A1A1B]">{{ t.code }}</span>
-                <div class="flex items-center gap-2">
-                  <span class="text-xs font-medium px-2.5 py-1 rounded-full" [class]="taskStatusClass(t.status)">
-                    {{ t.status }}
-                  </span>
-                  @if (t.status !== 'Accepted') {
-                    <button (click)="markReady(t.id)"
-                      class="h-8 px-3 rounded-lg border border-[#E5E7EB] text-xs text-[#6B7280] font-medium hover:border-[#005BFF] hover:text-[#005BFF] transition-colors">
-                      Готовы сдать
-                    </button>
-                  }
-                </div>
+          <!-- Tasks -->
+          @if (team.tasks.length > 0) {
+            <div class="border border-[#E5E7EB] rounded-lg overflow-hidden">
+              <div class="px-4 py-3 border-b border-[#E5E7EB] bg-[#F9FAFB]">
+                <p class="text-sm font-semibold text-[#1A1A1B]">Задачи</p>
               </div>
-            }
-          </div>
+              <div class="divide-y divide-[#F3F4F6]">
+                @for (t of team.tasks; track t.id) {
+                  <div class="px-4 py-3">
+                    <div class="flex items-center justify-between gap-3 flex-wrap">
+                      <div>
+                        <span class="text-sm font-mono font-medium text-[#1A1A1B]">{{ t.code }}</span>
+                        <span class="text-xs text-[#6B7280] ml-2">{{ t.title }}</span>
+                      </div>
+                      <span class="text-xs font-medium px-2.5 py-1 rounded-full" [class]="taskStatusClass(t.status)">
+                        {{ taskStatusLabel(t.status) }}
+                      </span>
+                    </div>
+                    @if (t.status !== 'Accepted') {
+                      <div class="flex items-center gap-2 mt-2">
+                        <input type="number" min="1" max="10" placeholder="Оценка (1–10)"
+                          [(ngModel)]="taskScores[t.id]"
+                          class="h-8 w-32 px-3 rounded-lg border border-[#E5E7EB] text-sm outline-none focus:border-[#005BFF] focus:ring-2 focus:ring-[#005BFF]/10 transition" />
+                        <button (click)="markReady(t.id)"
+                          class="h-8 px-3 rounded-lg border border-[#E5E7EB] text-xs text-[#6B7280] font-medium hover:border-[#005BFF] hover:text-[#005BFF] transition-colors">
+                          Готовы сдать
+                        </button>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      } @else if (!teamLoading) {
+        <div class="bg-white rounded-xl border border-[#E5E7EB] p-5">
+          <p class="text-sm text-[#9CA3AF]">Команда не найдена — возможно, вы ещё не распределены.</p>
         </div>
       }
     </div>
@@ -113,8 +124,9 @@ export class LectureDetailComponent implements OnInit, OnDestroy {
   private toast = inject(ToastService);
 
   activityId = '';
-  teamId: string | null = null;
-  tasks: { id: string; code: string; status: string }[] = [];
+  team: MyTeamDto | null = null;
+  teamLoading = true;
+  taskScores: Record<string, number | null> = {};
   miniTest: MiniTestDto | null = null;
   answers: Record<string, number> = {};
   testSubmitted = false;
@@ -125,16 +137,28 @@ export class LectureDetailComponent implements OnInit, OnDestroy {
   ngOnInit() {
     this.activityId = this.route.snapshot.paramMap.get('id') ?? '';
     this.loadMiniTest();
+    this.loadTeam();
     this.sub = this.signalr.notification$.subscribe(payload => {
       if (payload.type === 'MiniTestOpened') this.loadMiniTest();
-      if (payload.type === 'TaskAccepted') this.toast.success(payload.title);
-      if (payload.type === 'TaskRejected') this.toast.error(payload.title);
+      if (payload.type === 'TaskAccepted') { this.toast.success(payload.title); this.loadTeam(); }
+      if (payload.type === 'TaskRejected') { this.toast.error(payload.title); this.loadTeam(); }
     });
   }
 
   ngOnDestroy() {
     this.sub?.unsubscribe();
     if (this.timer) clearInterval(this.timer);
+  }
+
+  async loadTeam() {
+    try {
+      this.team = await this.api.myTeam(this.activityId);
+      this.team.tasks.forEach(t => { if (!(t.id in this.taskScores)) this.taskScores[t.id] = null; });
+    } catch {
+      this.team = null;
+    } finally {
+      this.teamLoading = false;
+    }
   }
 
   async loadMiniTest() {
@@ -171,9 +195,9 @@ export class LectureDetailComponent implements OnInit, OnDestroy {
   }
 
   async callAssistant() {
-    if (!this.teamId) return;
+    if (!this.team) return;
     try {
-      await this.api.requestHelp(this.teamId);
+      await this.api.requestHelp(this.team.id);
       this.toast.success('Ассистент вызван!');
     } catch (e: unknown) {
       this.toast.error(e instanceof Error ? e.message : 'Ошибка');
@@ -181,9 +205,14 @@ export class LectureDetailComponent implements OnInit, OnDestroy {
   }
 
   async markReady(taskItemId: string) {
-    if (!this.teamId) return;
+    if (!this.team) return;
+    const score = this.taskScores[taskItemId];
+    if (score === null || score === undefined || score < 1 || score > 10) {
+      this.toast.error('Введите оценку от 1 до 10');
+      return;
+    }
     try {
-      await this.api.markTeamTaskReady(this.teamId, taskItemId);
+      await this.api.markTeamTaskReady(this.team.id, taskItemId);
       this.toast.success('Ассистент уведомлён о готовности');
     } catch (e: unknown) {
       this.toast.error(e instanceof Error ? e.message : 'Ошибка');
@@ -192,11 +221,20 @@ export class LectureDetailComponent implements OnInit, OnDestroy {
 
   fmt(s: number) { return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
 
+  taskStatusLabel(status: string) {
+    const map: Record<string, string> = {
+      Accepted: 'Принято', InReview: 'На проверке', Rejected: 'Не принято', NotStarted: 'Не начато',
+      ReadyForReview: 'Ожидает приёма'
+    };
+    return map[status] ?? status;
+  }
+
   taskStatusClass(status: string) {
     const map: Record<string, string> = {
       Accepted: 'bg-[#D1FAE5] text-[#059669]',
       InReview: 'bg-[#EAF2FF] text-[#005BFF]',
       Rejected: 'bg-[#FEE2E2] text-[#DC2626]',
+      ReadyForReview: 'bg-[#FEF3C7] text-[#D97706]',
     };
     return map[status] ?? 'bg-[#F3F4F6] text-[#6B7280]';
   }

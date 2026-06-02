@@ -199,7 +199,10 @@ export class DashboardComponent implements OnInit {
     this.loading = false;
   }
 
-  activityHref(a: StudentActivity) { return a.type === 2 ? `/kt/${a.id}` : `/lecture/${a.id}`; }
+  activityHref(a: StudentActivity) {
+    if (this.auth.isAssistant()) return a.type === 2 ? `/assistant/kt/${a.id}` : `/assistant/session/${a.id}`;
+    return a.type === 2 ? `/kt/${a.id}` : `/lecture/${a.id}`;
+  }
 
   actIcon(type: number) { return ['\u{1F4D6}', '\u{1F9EA}', '\u{1F4DD}', '\u{1F4DA}'][type] ?? '\u{1F4C5}'; }
   actIconBg(type: number) {
@@ -211,7 +214,7 @@ export class DashboardComponent implements OnInit {
 
   fmtCountdown(d: string) {
     const diff = new Date(d).getTime() - Date.now();
-    if (diff <= 0) return 'скоро';
+    if (diff <= 0) return 'завершено';
     const days = Math.floor(diff / 86400000);
     if (days > 0) return `через ${days} д.`;
     const hrs = Math.floor(diff / 3600000);

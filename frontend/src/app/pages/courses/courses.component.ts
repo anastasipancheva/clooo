@@ -46,7 +46,13 @@ export class CoursesComponent implements OnInit {
   enrolled = new Set<string>();
   loading = signal<string | null>(null);
 
-  ngOnInit() { this.api.listCourses().then(c => this.courseList = c).catch(() => {}); }
+  ngOnInit() {
+    this.api.listCourses().then(c => {
+      this.courseList = c;
+      // Pre-populate enrollment set from server response
+      c.forEach(course => { if (course.isEnrolled) this.enrolled.add(course.id); });
+    }).catch(() => {});
+  }
 
   async enroll(courseId: string) {
     this.loading.set(courseId);
@@ -56,7 +62,7 @@ export class CoursesComponent implements OnInit {
       this.toast.success('Вы записаны на курс');
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Ошибка';
-      if (msg.includes('Already enrolled')) this.toast.info('Вы уже записаны на этот курс');
+      if (msg.includes('Already enrolled')) { this.enrolled.add(courseId); this.toast.info('Вы уже записаны на этот курс'); }
       else this.toast.error(msg);
     } finally {
       this.loading.set(null);
