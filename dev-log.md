@@ -66,3 +66,4 @@
 [2026-05-27 09:35:00] api: AssistantStatsController - session stats
 [2026-05-27 12:00:00] fix: team swap log, prevent double assignment
 [2026-05-27 14:40:00] frontend: assistant stats panel in session page
+[2026-06-02 10:20:00] infra: AddModuleTemplateDates migration
