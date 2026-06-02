@@ -68,3 +68,4 @@
 [2026-05-27 14:40:00] frontend: assistant stats panel in session page
 [2026-06-02 10:20:00] infra: AddModuleTemplateDates migration
 [2026-06-02 12:55:00] api: CourseTemplatesController - date range support
+[2026-06-02 15:30:00] frontend: calendar page - schedule view
