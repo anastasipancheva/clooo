@@ -69,3 +69,4 @@
 [2026-06-02 10:20:00] infra: AddModuleTemplateDates migration
 [2026-06-02 12:55:00] api: CourseTemplatesController - date range support
 [2026-06-02 15:30:00] frontend: calendar page - schedule view
+[2026-06-02 17:15:00] frontend: date picker for template creation
