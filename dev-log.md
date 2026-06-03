@@ -72,3 +72,4 @@
 [2026-06-02 17:15:00] frontend: date picker for template creation
 [2026-06-03 09:40:00] api: GradebookController - final grade view
 [2026-06-03 12:10:00] domain: GradeOverride entity - manual grade fix
+[2026-06-03 14:50:00] frontend: gradebook page - grade table
