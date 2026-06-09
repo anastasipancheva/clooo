@@ -29,6 +29,9 @@ export class AuthService {
     try {
       const u = await this.api.me();
       this._user.set(u);
+      // Refresh JWT so role claims always reflect current DB state
+      const refreshed = await this.api.refreshToken();
+      this.setToken(refreshed.accessToken);
     } catch {
       this.clearToken();
     } finally {

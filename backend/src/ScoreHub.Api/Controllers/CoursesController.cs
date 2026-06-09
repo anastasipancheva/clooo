@@ -74,28 +74,4 @@ public sealed class CoursesController : ControllerBase
         return Ok(students);
     }
 
-    /// <summary>Записать текущего пользователя на курс (студент записывается сам).</summary>
-    [HttpPost("{courseId:guid}/enroll")]
-    public async Task<IActionResult> Enroll(Guid courseId, CancellationToken ct)
-    {
-        var uid = CurrentUserId;
-        if (uid is null) return Unauthorized();
-
-        var exists = await _db.Courses.AnyAsync(c => c.Id == courseId, ct);
-        if (!exists) return NotFound(new { error = "Course not found." });
-
-        var already = await _db.CourseEnrollments
-            .AnyAsync(e => e.CourseId == courseId && e.UserId == uid.Value, ct);
-
-        if (already) return Conflict(new { error = "Already enrolled." });
-
-        _db.CourseEnrollments.Add(new CourseEnrollment
-        {
-            CourseId = courseId,
-            UserId = uid.Value,
-            EnrolledAt = DateTimeOffset.UtcNow
-        });
-        await _db.SaveChangesAsync(ct);
-        return Ok();
-    }
 }

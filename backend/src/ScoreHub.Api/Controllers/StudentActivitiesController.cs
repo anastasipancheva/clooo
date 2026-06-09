@@ -26,18 +26,24 @@ public sealed class StudentActivitiesController : ApiControllerBase
         if (user is null) return Unauthorized();
 
         var isAssistant = user.Role == Domain.Enums.UserRole.Assistant;
+        var isTeacher = user.Role is Domain.Enums.UserRole.Teacher or Domain.Enums.UserRole.Admin;
 
-        var courseIds = await _db.CourseEnrollments
-            .Where(e => e.UserId == uid.Value)
-            .Select(e => e.CourseId)
-            .ToListAsync(ct);
-
-        // For assistants: Active activities must have an approved ActivityAssistant record.
-        // Scheduled activities are shown so they can apply; Active without approval are hidden.
         IQueryable<Domain.Entities.Activity> query = _db.Activities.AsNoTracking();
 
-        if (isAssistant)
+        if (isTeacher)
         {
+            // Преподаватель видит все занятия без ограничений по записи на курс
+            query = query.Where(a => a.Status != ActivityStatus.Finished);
+        }
+        else if (isAssistant)
+        {
+            var courseIds = await _db.CourseEnrollments
+                .Where(e => e.UserId == uid.Value)
+                .Select(e => e.CourseId)
+                .ToListAsync(ct);
+
+            // Active activities must have an approved ActivityAssistant record.
+            // Scheduled activities are shown so they can apply; Active without approval are hidden.
             var approvedActivityIds = await _db.ActivityAssistants
                 .Where(aa => aa.AssistantId == uid.Value)
                 .Select(aa => aa.ActivityId)
@@ -50,6 +56,11 @@ public sealed class StudentActivitiesController : ApiControllerBase
         }
         else
         {
+            var courseIds = await _db.CourseEnrollments
+                .Where(e => e.UserId == uid.Value)
+                .Select(e => e.CourseId)
+                .ToListAsync(ct);
+
             query = query.Where(a =>
                 courseIds.Contains(a.Module.CourseId)
                 && a.Status != ActivityStatus.Finished);
@@ -76,35 +87,4 @@ public sealed class StudentActivitiesController : ApiControllerBase
         return Ok(activities.OrderBy(a => a.StartsAt));
     }
 
-    /// <summary>Самостоятельная запись студента на курс.</summary>
-    [HttpPost("courses/{courseId:guid}/enroll")]
-    public async Task<IActionResult> Enroll(Guid courseId, CancellationToken ct)
-    {
-        var uid = CurrentUserId;
-        if (uid is null) return Unauthorized();
-
-        var courseExists = await _db.Courses.AnyAsync(c => c.Id == courseId, ct);
-        if (!courseExists) return NotFound();
-
-        var exists = await _db.CourseEnrollments
-            .AnyAsync(e => e.CourseId == courseId && e.UserId == uid.Value, ct);
-        if (exists) return Conflict(new { error = "Already enrolled" });
-
-        _db.CourseEnrollments.Add(new CourseEnrollment
-        {
-            CourseId = courseId,
-            UserId = uid.Value,
-            EnrolledAt = DateTimeOffset.UtcNow
-        });
-        try
-        {
-            await _db.SaveChangesAsync(ct);
-        }
-        catch (Microsoft.EntityFrameworkCore.DbUpdateException)
-        {
-            // Race condition: another request enrolled between our check and save
-            return Conflict(new { error = "Already enrolled" });
-        }
-        return Ok();
-    }
 }

@@ -43,12 +43,43 @@ public sealed class AssistantStatsController : ApiControllerBase
         return Ok(apps);
     }
 
-    /// <summary>Все одобренные заявки текущего ассистента с данными о модуле и курсе.</summary>
+    /// <summary>Все одобренные заявки текущего ассистента с данными о модуле и курсе.
+    /// Преподаватель видит все занятия (без необходимости подавать заявки).</summary>
     [HttpGet("my-sessions")]
     public async Task<IActionResult> MySessions(CancellationToken ct)
     {
         var uid = CurrentUserId;
         if (uid is null) return Unauthorized();
+
+        var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == uid.Value, ct);
+        if (user is null) return Unauthorized();
+
+        var isTeacher = user.Role is ScoreHub.Domain.Enums.UserRole.Teacher or ScoreHub.Domain.Enums.UserRole.Admin;
+
+        if (isTeacher)
+        {
+            // Преподаватель является ассистентом на всех занятиях автоматически
+            var allSessions = await _db.Activities
+                .AsNoTracking()
+                .Where(a => a.Status != ScoreHub.Domain.Enums.ActivityStatus.Finished)
+                .Select(a => new
+                {
+                    Id = a.Id,
+                    ActivityId = a.Id,
+                    ActivityTitle = a.Title,
+                    ActivityType = a.Type.ToString(),
+                    ActivityStatus = a.Status.ToString(),
+                    ActivityStartsAt = a.StartsAt,
+                    ModuleId = a.Module.Id,
+                    ModuleNumber = a.Module.Number,
+                    ModuleTitle = a.Module.Title,
+                    CourseId = a.Module.Course.Id,
+                    CourseCode = a.Module.Course.Code,
+                    CourseTitle = a.Module.Course.Title,
+                })
+                .ToListAsync(ct);
+            return Ok(allSessions.OrderBy(a => a.ActivityStartsAt));
+        }
 
         var sessions = await _db.AssistantApplications
             .AsNoTracking()

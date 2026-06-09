@@ -31,6 +31,7 @@ export class ApiService {
       ('/api/auth/register', { email, password, displayName });
   }
   me() { return this.get<User>('/api/auth/me'); }
+  refreshToken() { return this.post<{ accessToken: string; expiresAtUtc: string; role: string }>('/api/auth/refresh'); }
 
   // Courses
   listCourses() { return this.get<Course[]>('/api/courses'); }

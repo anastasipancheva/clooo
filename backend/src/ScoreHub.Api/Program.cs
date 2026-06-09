@@ -128,7 +128,7 @@ app.UseExceptionHandler(errApp => errApp.Run(async ctx =>
     ctx.Response.StatusCode = 500;
     ctx.Response.ContentType = "application/json";
     var ex = ctx.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
-    var msg = ex?.Message ?? "Unexpected error";
+    var msg = ex?.InnerException?.Message ?? ex?.Message ?? "Unexpected error";
     await ctx.Response.WriteAsJsonAsync(new { error = msg });
 }));
 

@@ -1,7 +1,6 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ApiService } from '../../core/api.service';
-import { ToastService } from '../../core/toast.service';
 import { Course } from '../../core/models';
 
 @Component({
@@ -24,13 +23,10 @@ import { Course } from '../../core/models';
               <p class="text-sm font-semibold text-[#1A1A1B]">{{ c.code }} — {{ c.title }}</p>
               <p class="text-xs text-[#6B7280]">{{ c.academicYear }}</p>
             </div>
-            @if (enrolled.has(c.id)) {
+            @if (c.isEnrolled) {
               <span class="flex items-center gap-1.5 text-xs text-[#059669] font-medium">✓ Записан</span>
             } @else {
-              <button (click)="enroll(c.id)" [disabled]="loading() === c.id"
-                class="h-8 px-4 rounded-lg bg-[#005BFF] text-white text-xs font-medium hover:bg-[#0050E6] disabled:opacity-60 transition-colors">
-                {{ loading() === c.id ? '...' : 'Записаться' }}
-              </button>
+              <span class="text-xs text-[#9CA3AF]">Запись через преподавателя</span>
             }
           </div>
         }
@@ -40,32 +36,10 @@ import { Course } from '../../core/models';
 })
 export class CoursesComponent implements OnInit {
   private api = inject(ApiService);
-  private toast = inject(ToastService);
 
   courseList: Course[] = [];
-  enrolled = new Set<string>();
-  loading = signal<string | null>(null);
 
   ngOnInit() {
-    this.api.listCourses().then(c => {
-      this.courseList = c;
-      // Pre-populate enrollment set from server response
-      c.forEach(course => { if (course.isEnrolled) this.enrolled.add(course.id); });
-    }).catch(() => {});
-  }
-
-  async enroll(courseId: string) {
-    this.loading.set(courseId);
-    try {
-      await this.api.enrollCourse(courseId);
-      this.enrolled.add(courseId);
-      this.toast.success('Вы записаны на курс');
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Ошибка';
-      if (msg.includes('Already enrolled')) { this.enrolled.add(courseId); this.toast.info('Вы уже записаны на этот курс'); }
-      else this.toast.error(msg);
-    } finally {
-      this.loading.set(null);
-    }
+    this.api.listCourses().then(c => { this.courseList = c; }).catch(() => {});
   }
 }

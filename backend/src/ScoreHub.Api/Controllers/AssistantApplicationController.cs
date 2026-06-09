@@ -41,6 +41,22 @@ public sealed class AssistantApplicationController : ApiControllerBase
         var uid = CurrentUserId;
         if (uid is null) return Unauthorized();
 
+        var isTeacher = User.IsInRole(AppRoles.Teacher) || User.IsInRole(AppRoles.Admin);
+
+        if (!isTeacher)
+        {
+            // Ассистент может подавать заявку только на курс, в котором он записан
+            var courseId = await _db.Activities
+                .Where(a => a.Id == activityId)
+                .Select(a => a.Module.CourseId)
+                .FirstOrDefaultAsync(ct);
+
+            var enrolled = await _db.CourseEnrollments
+                .AnyAsync(e => e.CourseId == courseId && e.UserId == uid.Value, ct);
+            if (!enrolled)
+                return Forbid();
+        }
+
         var exists = await _db.AssistantApplications
             .AnyAsync(a => a.ActivityId == activityId && a.AssistantId == uid.Value, ct);
         if (exists) return Conflict(new { error = "Already applied" });

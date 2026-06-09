@@ -89,6 +89,23 @@ public sealed class AuthController : ControllerBase
         return Ok(new MeResponse(user.Id, user.Email, user.DisplayName, user.Role.ToString()));
     }
 
+    /// <summary>Выдать новый JWT с актуальной ролью из БД (нужен после смены роли администратором).</summary>
+    [HttpPost("refresh")]
+    [Authorize]
+    public async Task<IActionResult> Refresh(CancellationToken ct)
+    {
+        var idStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (idStr is null || !Guid.TryParse(idStr, out var id))
+            return Unauthorized();
+
+        var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id, ct);
+        if (user is null) return Unauthorized();
+
+        var roles = new[] { user.Role.ToString() };
+        var token = _jwt.CreateAccessToken(user.Id, user.Email, user.DisplayName, roles);
+        return Ok(new { accessToken = token.Token, expiresAtUtc = token.ExpiresAtUtc, role = user.Role.ToString() });
+    }
+
     /// <summary>[DEV ONLY] Задать роль пользователю по email.</summary>
     [HttpPost("dev/set-role")]
     [AllowAnonymous]
