@@ -76,3 +76,4 @@
 [2026-06-09 10:05:00] fix: JWT expiry handling, refresh flow
 [2026-06-09 12:30:00] infra: AddCourseInviteCode migration
 [2026-06-09 15:00:00] frontend: fix notification badge count
+[2026-06-09 16:45:00] frontend: activity-type.ts - enum helpers
