@@ -78,3 +78,4 @@
 [2026-06-09 15:00:00] frontend: fix notification badge count
 [2026-06-09 16:45:00] frontend: activity-type.ts - enum helpers
 [2026-06-10 09:50:00] fix: KT queue - correct order by ReadyAt
+[2026-06-10 11:20:00] fix: homework timer reset on resubmit
