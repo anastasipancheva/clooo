@@ -112,12 +112,36 @@ public sealed class CourseTemplateService(ScoreHubDbContext db) : ICourseTemplat
         };
 
         var modules = template.Modules.OrderBy(m => m.Number).ToList();
+
+        // Determine date anchor: explicit StartDate > first template module date > today
+        DateTimeOffset? dateAnchor = req.StartDate;
+        if (dateAnchor is null && modules.Count > 0 && modules[0].StartsAt.HasValue)
+            dateAnchor = null; // keep template dates as-is when no StartDate provided
+
+        // If StartDate is provided, calculate offset from the template's first module start (or index 0)
+        TimeSpan dateShift = TimeSpan.Zero;
+        if (req.StartDate.HasValue && modules.Count > 0)
+        {
+            var templateAnchor = modules[0].StartsAt ?? now;
+            dateShift = req.StartDate.Value.Date - templateAnchor.Date;
+        }
+
         for (int mi = 0; mi < modules.Count; mi++)
         {
             var mt = modules[mi];
-            // Use template dates if set; otherwise auto-calculate (2 weeks per module)
-            var moduleStart = mt.StartsAt ?? now.AddDays(mi * 14);
-            var moduleEnd   = mt.EndsAt   ?? moduleStart.AddDays(13);
+            DateTimeOffset moduleStart, moduleEnd;
+            if (req.StartDate.HasValue)
+            {
+                // Shift template dates by the delta; if template has no dates, space evenly
+                moduleStart = mt.StartsAt.HasValue ? mt.StartsAt.Value + dateShift : req.StartDate.Value.AddDays(mi * 14);
+                moduleEnd   = mt.EndsAt.HasValue   ? mt.EndsAt.Value   + dateShift : moduleStart.AddDays(13);
+            }
+            else
+            {
+                // Use template dates if present, otherwise auto-calculate from today
+                moduleStart = mt.StartsAt ?? now.AddDays(mi * 14);
+                moduleEnd   = mt.EndsAt   ?? moduleStart.AddDays(13);
+            }
 
             var module = new Module
             {

@@ -149,6 +149,13 @@ function defaultAcademicYear() {
           }
           @if (!structureLoading && structure) {
             <div class="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
+              <!-- Save as template button -->
+              <div class="px-4 py-3 border-b border-[#E5E7EB] flex items-center justify-between bg-[#FAFAFA]">
+                <p class="text-xs text-[#6B7280]">{{ structure.modules.length }} модул. · {{ totalActivities(structure) }} занятий</p>
+                <button (click)="openSaveAsTemplate()" [class]="BTN_GHOST + ' text-[#7C3AED] border-[#DDD6FE] hover:bg-[#F5F3FF]'">
+                  💾 Сохранить как шаблон
+                </button>
+              </div>
               <div class="p-4 space-y-3">
                 @if (structure.modules.length === 0) {
                   <p class="text-sm text-[#9CA3AF] text-center py-4">Нет модулей. Добавьте модуль выше.</p>
@@ -156,34 +163,50 @@ function defaultAcademicYear() {
                 @for (m of structure.modules; track m.id) {
                   <div class="border border-[#E5E7EB] rounded-lg overflow-hidden">
                     <!-- Module header -->
-                    <div class="bg-[#F9FAFB] px-4 py-2.5 flex items-center justify-between">
+                    <div class="bg-[#F9FAFB] px-4 py-2.5 flex items-center justify-between gap-2 flex-wrap">
                       <div class="flex items-center gap-2">
                         <span class="text-xs font-bold text-[#005BFF] uppercase">М{{ m.number }}</span>
-                        <span class="text-sm font-semibold text-[#1A1A1B]">{{ m.title }}</span>
+                        @if (editingModuleId !== m.id) {
+                          <span class="text-sm font-semibold text-[#1A1A1B]">{{ m.title }}</span>
+                        } @else {
+                          <input [class]="INPUT + ' w-40 h-7 text-xs'" [(ngModel)]="editModuleTitle" />
+                        }
                       </div>
-                      <div class="flex items-center gap-2">
-                        <span class="text-xs text-[#9CA3AF]">
-                          {{ m.startsAt | date:'dd.MM.yyyy' }} — {{ m.endsAt | date:'dd.MM.yyyy' }}
-                        </span>
-                        <button
-                          (click)="selectedModuleId = selectedModuleId === m.id ? null : m.id; actTitle=''; actStart=''; actEnd=''; actType='1'"
-                          class="flex items-center gap-1 h-7 px-2.5 rounded-md text-xs font-medium transition-colors"
-                          [class]="selectedModuleId === m.id ? 'bg-[#005BFF] text-white' : 'bg-[#EAF2FF] text-[#005BFF] hover:bg-[#D1E6FF]'">
-                          ➕ Занятие
-                        </button>
-                        <button (click)="deleteModule(m.id, m.title)"
-                          class="flex items-center justify-center w-7 h-7 rounded-md text-[#9CA3AF] hover:text-[#EF4444] hover:bg-red-50 transition-colors">
-                          🗑
-                        </button>
+                      <div class="flex items-center gap-1.5 flex-wrap">
+                        @if (editingModuleId !== m.id) {
+                          <button (click)="startEditModule(m)"
+                            class="flex items-center gap-1 h-7 px-2 rounded-md text-xs text-[#6B7280] hover:text-[#005BFF] hover:bg-[#EAF2FF] transition-colors">
+                            ✏️ Даты
+                          </button>
+                        } @else {
+                          <!-- Inline date editor for module -->
+                          <input [class]="INPUT + ' w-30 h-7 text-xs'" type="date" [(ngModel)]="editModuleStart" title="Начало" />
+                          <span class="text-xs text-[#9CA3AF]">—</span>
+                          <input [class]="INPUT + ' w-30 h-7 text-xs'" type="date" [(ngModel)]="editModuleEnd" title="Конец" />
+                          <button (click)="saveEditModule(m.id)" [class]="BTN_PRIMARY + ' h-7 text-xs px-3'">✓</button>
+                          <button (click)="editingModuleId = null" [class]="BTN_GHOST + ' h-7 text-xs px-2'">✕</button>
+                        }
+                        @if (editingModuleId !== m.id) {
+                          <span class="text-xs text-[#9CA3AF]">
+                            {{ m.startsAt | date:'dd.MM' }} — {{ m.endsAt | date:'dd.MM.yyyy' }}
+                          </span>
+                          <button
+                            (click)="selectedModuleId = selectedModuleId === m.id ? null : m.id; actTitle=''; actStart=''; actEnd=''; actType='1'"
+                            class="flex items-center gap-1 h-7 px-2.5 rounded-md text-xs font-medium transition-colors"
+                            [class]="selectedModuleId === m.id ? 'bg-[#005BFF] text-white' : 'bg-[#EAF2FF] text-[#005BFF] hover:bg-[#D1E6FF]'">
+                            ➕ Занятие
+                          </button>
+                          <button (click)="deleteModule(m.id, m.title)"
+                            class="flex items-center justify-center w-7 h-7 rounded-md text-[#9CA3AF] hover:text-[#EF4444] hover:bg-red-50 transition-colors">
+                            🗑
+                          </button>
+                        }
                       </div>
                     </div>
 
                     <!-- Inline add-activity form -->
                     @if (selectedModuleId === m.id) {
                       <div class="px-4 py-3 border-b border-[#E5E7EB] bg-[#FAFBFF]">
-                        <p class="text-xs text-[#9CA3AF] mb-2">
-                          Период модуля: {{ m.startsAt | date:'dd.MM.yyyy' }} — {{ m.endsAt | date:'dd.MM.yyyy' }}
-                        </p>
                         <div class="flex flex-wrap gap-2 items-end">
                           <div>
                             <label class="block text-xs text-[#6B7280] mb-1">Тип</label>
@@ -218,17 +241,34 @@ function defaultAcademicYear() {
                     @if (m.activities.length > 0) {
                       <div class="divide-y divide-[#F3F4F6]">
                         @for (a of m.activities; track a.id) {
-                          <div class="px-4 py-2.5">
-                            <div class="flex items-center gap-2 flex-wrap">
-                              <span class="text-xs font-medium px-1.5 py-0.5 rounded"
-                                [class]="a.type === 'ControlPoint' ? 'bg-[#FEF3C7] text-[#D97706]' : a.type === 'Lecture' ? 'bg-[#EAF2FF] text-[#005BFF]' : 'bg-[#F3F4F6] text-[#6B7280]'">
-                                {{ actTypeLabel(a.type) }}
-                              </span>
-                              <span class="text-sm font-medium text-[#1A1A1B]">{{ a.title }}</span>
-                              <span class="text-xs text-[#9CA3AF]">
-                                {{ a.startsAt | date:'d MMM HH:mm' }}
-                              </span>
-                            </div>
+                          <div class="px-4 py-2">
+                            @if (editingActivityId !== a.id) {
+                              <div class="flex items-center justify-between gap-2">
+                                <div class="flex items-center gap-2 flex-wrap min-w-0">
+                                  <span class="text-xs font-medium px-1.5 py-0.5 rounded flex-shrink-0"
+                                    [class]="a.type === 'ControlPoint' ? 'bg-[#FEF3C7] text-[#D97706]' : a.type === 'Lecture' ? 'bg-[#EAF2FF] text-[#005BFF]' : 'bg-[#F3F4F6] text-[#6B7280]'">
+                                    {{ actTypeLabel(a.type) }}
+                                  </span>
+                                  <span class="text-sm font-medium text-[#1A1A1B] truncate">{{ a.title }}</span>
+                                  <span class="text-xs text-[#9CA3AF] flex-shrink-0">
+                                    {{ a.startsAt | date:'d MMM HH:mm' }} — {{ a.endsAt | date:'HH:mm' }}
+                                  </span>
+                                </div>
+                                <button (click)="startEditActivity(a)"
+                                  class="flex-shrink-0 h-6 px-2 rounded-md text-xs text-[#9CA3AF] hover:text-[#005BFF] hover:bg-[#EAF2FF] transition-colors">
+                                  ✏️
+                                </button>
+                              </div>
+                            } @else {
+                              <!-- Inline editor for activity dates -->
+                              <div class="flex flex-wrap gap-2 items-end py-1">
+                                <input [class]="INPUT + ' flex-1 min-w-32 h-8 text-xs'" [(ngModel)]="editActTitle" placeholder="Название" />
+                                <input [class]="INPUT + ' w-36 h-8 text-xs'" type="datetime-local" [(ngModel)]="editActStart" />
+                                <input [class]="INPUT + ' w-36 h-8 text-xs'" type="datetime-local" [(ngModel)]="editActEnd" />
+                                <button (click)="saveEditActivity(a.id)" [class]="BTN_PRIMARY + ' h-8 text-xs'">✓ Сохранить</button>
+                                <button (click)="editingActivityId = null" [class]="BTN_GHOST + ' h-8 text-xs'">✕</button>
+                              </div>
+                            }
                           </div>
                         }
                       </div>
@@ -733,6 +773,20 @@ function defaultAcademicYear() {
                         <input [class]="INPUT + ' flex-1 min-w-32'" [(ngModel)]="a.title" placeholder="Название занятия" />
                         <button (click)="tplRemoveActivity(mi, ai)" class="text-[#EF4444] text-xs">✕</button>
                       </div>
+                      <!-- Tasks for this activity -->
+                      @if (a.tasks.length > 0) {
+                        <div class="pl-4 pt-1 space-y-1">
+                          @for (t of a.tasks; track t; let ti = $index) {
+                            <div class="flex items-center gap-1.5">
+                              <input [class]="INPUT + ' w-16 h-7 text-xs'" [(ngModel)]="t.code" placeholder="Код" />
+                              <input [class]="INPUT + ' flex-1 h-7 text-xs'" [(ngModel)]="t.title" placeholder="Название задачи" />
+                              <input [class]="INPUT + ' w-14 h-7 text-xs'" type="number" min="0.5" step="0.5" [(ngModel)]="t.points" placeholder="Балл" />
+                              <button (click)="tplRemoveTask(mi, ai, ti)" class="text-[#EF4444] text-xs w-5">✕</button>
+                            </div>
+                          }
+                        </div>
+                      }
+                      <button (click)="tplAddTask(mi, ai)" class="text-[10px] text-[#6B7280] hover:text-[#005BFF] ml-4 mt-0.5">+ задача</button>
                     }
                     <button (click)="tplAddActivity(mi)" class="text-xs text-[#005BFF] hover:underline">+ занятие</button>
                   </div>
@@ -830,6 +884,33 @@ function defaultAcademicYear() {
             </div>
           }
 
+          <!-- Save as template dialog -->
+          @if (saveAsTplModal) {
+            <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" (click)="saveAsTplModal = false">
+              <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl space-y-4" (click)="$event.stopPropagation()">
+                <p class="font-semibold text-[#1A1A1B]">💾 Сохранить как шаблон</p>
+                <p class="text-sm text-[#6B7280]">Структура курса (модули, занятия, задачи) будет сохранена как шаблон для повторного использования.</p>
+                <div class="space-y-3">
+                  <div>
+                    <label class="block text-xs text-[#6B7280] mb-1">Название шаблона *</label>
+                    <input [class]="INPUT + ' w-full'" [(ngModel)]="saveAsTplTitle" placeholder="напр. Математика ч.2" />
+                  </div>
+                  <div>
+                    <label class="block text-xs text-[#6B7280] mb-1">Описание</label>
+                    <input [class]="INPUT + ' w-full'" [(ngModel)]="saveAsTplDesc" placeholder="необязательно" />
+                  </div>
+                </div>
+                <div class="flex gap-2 pt-1">
+                  <button (click)="saveAsTplModal = false" [class]="BTN_GHOST + ' flex-1'">Отмена</button>
+                  <button (click)="saveAsTemplate()" [disabled]="saveAsTplSaving || !saveAsTplTitle"
+                    [class]="BTN_PRIMARY + ' flex-1 bg-[#7C3AED] hover:bg-[#6D28D9]'">
+                    {{ saveAsTplSaving ? '⏳...' : '💾 Сохранить' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+          }
+
           <!-- Apply template dialog -->
           @if (applyTpl) {
             <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" (click)="applyTpl = null">
@@ -849,9 +930,14 @@ function defaultAcademicYear() {
                     <label class="block text-xs text-[#6B7280] mb-1">Учебный год *</label>
                     <input [class]="INPUT + ' w-full'" [(ngModel)]="applyYear" placeholder="2025/2026" />
                   </div>
+                  <div>
+                    <label class="block text-xs text-[#6B7280] mb-1">Дата начала первого модуля</label>
+                    <input [class]="INPUT + ' w-full'" type="date" [(ngModel)]="applyStartDate" />
+                    <p class="text-[10px] text-[#9CA3AF] mt-1">Все даты из шаблона сдвинутся на этот день. Если не указать — используются даты шаблона или сегодня.</p>
+                  </div>
                 </div>
                 <p class="text-xs text-[#6B7280]">
-                  Будет создан курс с готовой структурой. Даты занятий — от сегодня, по 2 недели на модуль. Скорректируйте их в разделе «Структура».
+                  После создания отредактируйте даты занятий во вкладке «Структура» (кнопка ✏️ Даты рядом с каждым модулем).
                 </p>
                 <div class="flex gap-2 pt-1">
                   <button (click)="applyTpl = null" [class]="BTN_GHOST + ' flex-1'">Отмена</button>
@@ -923,13 +1009,23 @@ export class AdminComponent implements OnInit {
   templates: TemplateSummary[] = [];
   templatesLoading = false;
   tplTitle = ''; tplDesc = '';
-  tplModules: { title: string; startsAt: string; endsAt: string; activities: { type: string; title: string }[] }[] = [];
+  tplModules: { title: string; startsAt: string; endsAt: string; activities: { type: string; title: string; tasks: { code: string; title: string; points: string }[] }[] }[] = [];
   tplSaving = false;
   expandedTpl: string | null = null;
   tplDetail: TemplateView | null = null;
   applyTpl: TemplateSummary | null = null;
-  applyCode = ''; applyTitle = ''; applyYear = defaultAcademicYear();
+  applyCode = ''; applyTitle = ''; applyYear = defaultAcademicYear(); applyStartDate = '';
   applying = false;
+
+  // Save-as-template modal
+  saveAsTplModal = false;
+  saveAsTplTitle = ''; saveAsTplDesc = ''; saveAsTplSaving = false;
+
+  // Inline module/activity editing
+  editingModuleId: string | null = null;
+  editModuleTitle = ''; editModuleStart = ''; editModuleEnd = '';
+  editingActivityId: string | null = null;
+  editActTitle = ''; editActStart = ''; editActEnd = '';
 
   // Invite modal
   inviteModal = false;
@@ -1217,7 +1313,9 @@ export class AdminComponent implements OnInit {
     this.tplModules.push({ title: '', startsAt: '', endsAt: '', activities: [] });
   }
   tplRemoveModule(i: number) { this.tplModules.splice(i, 1); }
-  tplAddActivity(mi: number) { this.tplModules[mi].activities.push({ type: '0', title: '' }); }
+  tplAddActivity(mi: number) { this.tplModules[mi].activities.push({ type: '0', title: '', tasks: [] }); }
+  tplAddTask(mi: number, ai: number) { this.tplModules[mi].activities[ai].tasks.push({ code: '', title: '', points: '1' }); }
+  tplRemoveTask(mi: number, ai: number, ti: number) { this.tplModules[mi].activities[ai].tasks.splice(ti, 1); }
   tplRemoveActivity(mi: number, ai: number) { this.tplModules[mi].activities.splice(ai, 1); }
 
   async saveTemplate() {
@@ -1236,7 +1334,11 @@ export class AdminComponent implements OnInit {
             type: parseInt(a.type),
             title: a.title || 'Занятие',
             taskFileUrl: null, theoryTestUrl: null,
-            tasks: []
+            tasks: (a.tasks ?? []).filter(t => t.code || t.title).map(t => ({
+              code: t.code || `T${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+              title: t.title || 'Задача',
+              points: parseFloat(t.points) || 1
+            }))
           }))
         }))
       };
@@ -1258,7 +1360,7 @@ export class AdminComponent implements OnInit {
 
   openApplyDialog(tpl: TemplateSummary) {
     this.applyTpl = tpl;
-    this.applyCode = ''; this.applyTitle = tpl.title; this.applyYear = defaultAcademicYear();
+    this.applyCode = ''; this.applyTitle = tpl.title; this.applyYear = defaultAcademicYear(); this.applyStartDate = '';
   }
 
   async applyTemplate() {
@@ -1266,7 +1368,8 @@ export class AdminComponent implements OnInit {
     this.applying = true;
     try {
       const { courseId } = await this.api.applyTemplate(this.applyTpl.id, {
-        courseCode: this.applyCode, courseTitle: this.applyTitle, academicYear: this.applyYear
+        courseCode: this.applyCode, courseTitle: this.applyTitle, academicYear: this.applyYear,
+        startDate: this.applyStartDate ? new Date(this.applyStartDate).toISOString() : undefined
       });
       this.toast.success('Курс создан из шаблона!');
       this.applyTpl = null;
@@ -1284,6 +1387,71 @@ export class AdminComponent implements OnInit {
       if (this.expandedTpl === tpl.id) { this.expandedTpl = null; this.tplDetail = null; }
       await this.loadTemplates();
     } catch { this.toast.error('Ошибка удаления'); }
+  }
+
+  // ── Inline module editing ────────────────────────────────────────────────
+  startEditModule(m: { id: string; title: string; startsAt: string; endsAt: string }) {
+    this.editingModuleId = m.id;
+    this.editModuleTitle = m.title;
+    this.editModuleStart = m.startsAt ? m.startsAt.slice(0, 10) : '';
+    this.editModuleEnd   = m.endsAt   ? m.endsAt.slice(0, 10)   : '';
+  }
+
+  async saveEditModule(moduleId: string) {
+    try {
+      await this.api.patchModule(moduleId, {
+        title: this.editModuleTitle || undefined,
+        startsAt: this.editModuleStart ? new Date(this.editModuleStart).toISOString() : undefined,
+        endsAt:   this.editModuleEnd   ? new Date(this.editModuleEnd).toISOString()   : undefined,
+      });
+      this.toast.success('Модуль обновлён');
+      this.editingModuleId = null;
+      await this.loadStructure();
+    } catch (e: unknown) { this.toast.error(e instanceof Error ? e.message : 'Ошибка'); }
+  }
+
+  // ── Inline activity editing ───────────────────────────────────────────────
+  startEditActivity(a: { id: string; title: string; startsAt: string; endsAt: string }) {
+    this.editingActivityId = a.id;
+    this.editActTitle = a.title;
+    this.editActStart = a.startsAt ? a.startsAt.slice(0, 16) : ''; // datetime-local needs YYYY-MM-DDTHH:mm
+    this.editActEnd   = a.endsAt   ? a.endsAt.slice(0, 16)   : '';
+  }
+
+  async saveEditActivity(activityId: string) {
+    try {
+      await this.api.patchActivity(activityId, {
+        title:    this.editActTitle   || undefined,
+        startsAt: this.editActStart   ? new Date(this.editActStart).toISOString()   : undefined,
+        endsAt:   this.editActEnd     ? new Date(this.editActEnd).toISOString()     : undefined,
+      });
+      this.toast.success('Занятие обновлено');
+      this.editingActivityId = null;
+      await this.loadStructure();
+    } catch (e: unknown) { this.toast.error(e instanceof Error ? e.message : 'Ошибка'); }
+  }
+
+  // ── Save course as template ───────────────────────────────────────────────
+  openSaveAsTemplate() {
+    const course = this.courseList.find(c => c.id === this.selected);
+    this.saveAsTplTitle = course ? course.title : '';
+    this.saveAsTplDesc = '';
+    this.saveAsTplModal = true;
+  }
+
+  async saveAsTemplate() {
+    if (!this.selected || !this.saveAsTplTitle) return;
+    this.saveAsTplSaving = true;
+    try {
+      await this.api.saveAsTemplate(this.selected, { title: this.saveAsTplTitle, description: this.saveAsTplDesc || undefined });
+      this.toast.success('Шаблон сохранён! Он доступен на вкладке 📋 Шаблоны.');
+      this.saveAsTplModal = false;
+    } catch (e: unknown) { this.toast.error(e instanceof Error ? e.message : 'Ошибка'); }
+    finally { this.saveAsTplSaving = false; }
+  }
+
+  totalActivities(structure: { modules: { activities: unknown[] }[] }) {
+    return structure.modules.reduce((sum, m) => sum + m.activities.length, 0);
   }
 
   // ── Invite link ──────────────────────────────────────────────────────────

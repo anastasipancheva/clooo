@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ScoreHub.Application.Abstractions;
 using ScoreHub.Application.Common;
+using ScoreHub.Infrastructure.Services;
 using ScoreHub.Domain.Auth;
 using ScoreHub.Domain.Entities;
 using ScoreHub.Domain.Enums;
@@ -21,12 +22,14 @@ public sealed class TeachingController : ApiControllerBase
     private readonly ITeachingSetupService _teaching;
     private readonly ScoreHubDbContext _db;
     private readonly INotificationService _notifications;
+    private readonly ICourseTemplateService _svc;
 
-    public TeachingController(ITeachingSetupService teaching, ScoreHubDbContext db, INotificationService notifications)
+    public TeachingController(ITeachingSetupService teaching, ScoreHubDbContext db, INotificationService notifications, ICourseTemplateService svc)
     {
         _teaching = teaching;
         _db = db;
         _notifications = notifications;
+        _svc = svc;
     }
 
     private IActionResult FromOp<T>(OpResult<T> r) =>
@@ -430,6 +433,66 @@ public sealed class TeachingController : ApiControllerBase
         return Ok();
     }
 
+    /// <summary>Обновить название и даты модуля.</summary>
+    [HttpPatch("modules/{moduleId:guid}")]
+    public async Task<IActionResult> PatchModule(Guid moduleId, [FromBody] PatchModuleDto dto, CancellationToken ct)
+    {
+        var module = await _db.Modules.FirstOrDefaultAsync(m => m.Id == moduleId, ct);
+        if (module is null) return NotFound();
+        if (dto.Title is not null) module.Title = dto.Title.Trim();
+        if (dto.StartsAt.HasValue) module.StartsAt = dto.StartsAt.Value;
+        if (dto.EndsAt.HasValue)   module.EndsAt   = dto.EndsAt.Value;
+        await _db.SaveChangesAsync(ct);
+        return Ok();
+    }
+
+    /// <summary>Обновить название, тип и даты занятия.</summary>
+    [HttpPatch("activities/{activityId:guid}")]
+    public async Task<IActionResult> PatchActivity(Guid activityId, [FromBody] PatchActivityDto dto, CancellationToken ct)
+    {
+        var activity = await _db.Activities.FirstOrDefaultAsync(a => a.Id == activityId, ct);
+        if (activity is null) return NotFound();
+        if (dto.Title is not null)    activity.Title    = dto.Title.Trim();
+        if (dto.StartsAt.HasValue)    activity.StartsAt = dto.StartsAt.Value;
+        if (dto.EndsAt.HasValue)      activity.EndsAt   = dto.EndsAt.Value;
+        await _db.SaveChangesAsync(ct);
+        return Ok();
+    }
+
+    /// <summary>Сохранить курс как новый шаблон.</summary>
+    [HttpPost("courses/{courseId:guid}/save-as-template")]
+    public async Task<IActionResult> SaveAsTemplate(Guid courseId, [FromBody] SaveAsTemplateDto dto, CancellationToken ct)
+    {
+        var course = await _db.Courses
+            .Include(c => c.Modules).ThenInclude(m => m.Activities).ThenInclude(a => a.TaskSets).ThenInclude(ts => ts.Tasks)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == courseId, ct);
+        if (course is null) return NotFound();
+
+        var req = new CreateTemplateRequest(
+            dto.Title ?? course.Title,
+            dto.Description,
+            course.Modules.OrderBy(m => m.Number).Select(m => new TemplateModuleDto(
+                m.Number,
+                m.Title,
+                m.Activities.Select(a => new TemplateActivityDto(
+                    (int)a.Type,
+                    a.Title,
+                    a.TaskFileUrl,
+                    a.TheoryTestUrl,
+                    a.TaskSets.SelectMany(ts => ts.Tasks)
+                              .Select(t => new TemplateTaskDto(t.Code, t.Title, t.Points))
+                              .ToList()
+                )).ToList(),
+                m.StartsAt,
+                m.EndsAt
+            )).ToList()
+        );
+
+        var id = await _svc.CreateAsync(req);
+        return Ok(new { id });
+    }
+
     /// <summary>Обновить материалы занятия (видео, тест, файл задач).</summary>
     [HttpPatch("activities/{activityId:guid}/materials")]
     public async Task<IActionResult> PatchMaterials(Guid activityId, [FromBody] PatchMaterialsDto dto, CancellationToken ct)
@@ -551,11 +614,10 @@ public sealed class TeachingController : ApiControllerBase
     public sealed record CreateCourseDto(string Code, string Title, string AcademicYear);
     public sealed record EnrollBulkDto(List<string> Emails);
     public sealed record AddModuleDto(int Number, string Title, DateTimeOffset StartsAt, DateTimeOffset EndsAt);
-    public sealed record AddActivityDto(
-        ActivityType Type,
-        string Title,
-        DateTimeOffset StartsAt,
-        DateTimeOffset EndsAt);
+    public sealed record AddActivityDto(ActivityType Type, string Title, DateTimeOffset StartsAt, DateTimeOffset EndsAt);
+    public sealed record PatchModuleDto(string? Title, DateTimeOffset? StartsAt, DateTimeOffset? EndsAt);
+    public sealed record PatchActivityDto(string? Title, DateTimeOffset? StartsAt, DateTimeOffset? EndsAt);
+    public sealed record SaveAsTemplateDto(string? Title, string? Description);
     public sealed record AddTaskSetDto(string Title);
     public sealed record AddTaskItemDto(string Code, string Title, string? Statement, decimal Points);
     public sealed record IdListDto(IReadOnlyList<Guid> Ids);

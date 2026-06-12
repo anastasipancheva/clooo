@@ -11,7 +11,8 @@ public record TemplateModuleView(Guid Id, int Number, string Title, List<Templat
 public record TemplateView(Guid Id, string Title, string? Description, DateTimeOffset CreatedAt, List<TemplateModuleView> Modules);
 public record TemplateSummary(Guid Id, string Title, string? Description, int ModuleCount, int ActivityCount, DateTimeOffset CreatedAt);
 
-public record ApplyTemplateRequest(string CourseCode, string CourseTitle, string AcademicYear);
+/// <summary>StartDate: дата начала первого модуля. Если не задана — используются даты шаблона или today+offset.</summary>
+public record ApplyTemplateRequest(string CourseCode, string CourseTitle, string AcademicYear, DateTimeOffset? StartDate = null);
 
 public interface ICourseTemplateService
 {

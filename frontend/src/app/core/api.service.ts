@@ -144,8 +144,14 @@ export class ApiService {
     return this.post<string>(`/api/teaching/courses/${courseId}/modules`, { number, title, startsAt, endsAt });
   }
   deleteModule(moduleId: string) { return this.delete<void>(`/api/teaching/modules/${moduleId}`); }
+  patchModule(moduleId: string, body: { title?: string; startsAt?: string; endsAt?: string }) {
+    return this.patch<void>(`/api/teaching/modules/${moduleId}`, body);
+  }
   addActivity(moduleId: string, type: number, title: string, startsAt: string, endsAt: string) {
     return this.post<string>(`/api/teaching/modules/${moduleId}/activities`, { type, title, startsAt, endsAt });
+  }
+  patchActivity(activityId: string, body: { title?: string; startsAt?: string; endsAt?: string }) {
+    return this.patch<void>(`/api/teaching/activities/${activityId}`, body);
   }
   patchMaterials(activityId: string, body: { preLectureVideoUrl?: string; theoryTestUrl?: string; taskFileUrl?: string }) {
     return this.patch<void>(`/api/teaching/activities/${activityId}/materials`, body);
@@ -163,8 +169,11 @@ export class ApiService {
   getTemplate(id: string) { return this.get<TemplateView>(`/api/templates/${id}`); }
   createTemplate(body: object) { return this.post<{ id: string }>('/api/templates', body); }
   deleteTemplate(id: string) { return this.delete<void>(`/api/templates/${id}`); }
-  applyTemplate(id: string, body: { courseCode: string; courseTitle: string; academicYear: string }) {
+  applyTemplate(id: string, body: { courseCode: string; courseTitle: string; academicYear: string; startDate?: string }) {
     return this.post<{ courseId: string }>(`/api/templates/${id}/apply`, body);
+  }
+  saveAsTemplate(courseId: string, body: { title?: string; description?: string }) {
+    return this.post<{ id: string }>(`/api/teaching/courses/${courseId}/save-as-template`, body);
   }
 
   autoGenerate(activityId: string, teamSize: number) {
