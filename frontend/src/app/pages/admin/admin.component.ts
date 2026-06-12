@@ -92,10 +92,16 @@ function defaultAcademicYear() {
                       <span class="text-sm text-[#6B7280] ml-2">{{ c.title }}</span>
                       <span class="text-xs text-[#9CA3AF] ml-2">{{ c.academicYear }}</span>
                     </div>
-                    <button (click)="deleteCourse(c.id, c.code)"
-                      class="w-8 h-8 flex items-center justify-center rounded-lg text-[#9CA3AF] hover:text-[#EF4444] hover:bg-red-50 transition-colors">
-                      🗑
-                    </button>
+                    <div class="flex items-center gap-1.5">
+                      <button (click)="showInvite(c.id)"
+                        class="h-7 px-3 rounded-lg bg-[#EAF2FF] text-[#005BFF] text-xs font-medium hover:bg-[#D1E6FF] transition-colors">
+                        🔗 Ссылка
+                      </button>
+                      <button (click)="deleteCourse(c.id, c.code)"
+                        class="w-8 h-8 flex items-center justify-center rounded-lg text-[#9CA3AF] hover:text-[#EF4444] hover:bg-red-50 transition-colors">
+                        🗑
+                      </button>
+                    </div>
                   </div>
                 }
               </div>
@@ -799,6 +805,31 @@ function defaultAcademicYear() {
             </div>
           }
 
+          <!-- Invite link modal -->
+          @if (inviteModal) {
+            <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" (click)="inviteModal = false">
+              <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl space-y-4" (click)="$event.stopPropagation()">
+                <p class="font-semibold text-[#1A1A1B]">🔗 Ссылка-приглашение</p>
+                <p class="text-sm text-[#6B7280]">Отправьте эту ссылку студентам. Только по ней можно записаться на курс.</p>
+                <div class="flex gap-2 items-center">
+                  <input [value]="inviteLink" readonly
+                    class="flex-1 h-9 px-3 rounded-lg border border-[#E5E7EB] text-xs text-[#1A1A1B] bg-[#F9FAFB] outline-none" />
+                  <button (click)="copyInvite()"
+                    class="h-9 px-3 rounded-lg bg-[#005BFF] text-white text-xs font-medium hover:bg-[#0050E6] transition-colors flex-shrink-0">
+                    {{ copied ? '✓' : '📋 Копировать' }}
+                  </button>
+                </div>
+                <div class="flex gap-2 pt-1">
+                  <button (click)="inviteModal = false" [class]="BTN_GHOST + ' flex-1'">Закрыть</button>
+                  <button (click)="regenerateInvite()" [disabled]="inviteRegenerating"
+                    class="flex-1 h-9 rounded-lg border border-[#FCA5A5] text-[#EF4444] text-xs font-medium hover:bg-[#FEF2F2] transition-colors disabled:opacity-60">
+                    {{ inviteRegenerating ? '⏳...' : '🔄 Новый код' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+          }
+
           <!-- Apply template dialog -->
           @if (applyTpl) {
             <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" (click)="applyTpl = null">
@@ -899,6 +930,13 @@ export class AdminComponent implements OnInit {
   applyTpl: TemplateSummary | null = null;
   applyCode = ''; applyTitle = ''; applyYear = defaultAcademicYear();
   applying = false;
+
+  // Invite modal
+  inviteModal = false;
+  inviteLink = '';
+  inviteCourseId = '';
+  inviteRegenerating = false;
+  copied = false;
 
   readonly tabs: { key: Tab; label: string }[] = [
     { key: 'courses', label: 'Курсы' },
@@ -1246,6 +1284,37 @@ export class AdminComponent implements OnInit {
       if (this.expandedTpl === tpl.id) { this.expandedTpl = null; this.tplDetail = null; }
       await this.loadTemplates();
     } catch { this.toast.error('Ошибка удаления'); }
+  }
+
+  // ── Invite link ──────────────────────────────────────────────────────────
+  async showInvite(courseId: string) {
+    this.inviteCourseId = courseId;
+    this.copied = false;
+    try {
+      const r = await this.api.getCourseInvite(courseId);
+      this.inviteLink = `${window.location.origin}/join/${r.inviteCode}`;
+      this.inviteModal = true;
+    } catch { this.toast.error('Не удалось получить ссылку'); }
+  }
+
+  async copyInvite() {
+    try {
+      await navigator.clipboard.writeText(this.inviteLink);
+      this.copied = true;
+      setTimeout(() => this.copied = false, 2000);
+    } catch { this.toast.error('Не удалось скопировать'); }
+  }
+
+  async regenerateInvite() {
+    if (!confirm('Старая ссылка перестанет работать. Продолжить?')) return;
+    this.inviteRegenerating = true;
+    try {
+      const r = await this.api.regenerateCourseInvite(this.inviteCourseId);
+      this.inviteLink = `${window.location.origin}/join/${r.inviteCode}`;
+      this.copied = false;
+      this.toast.success('Новый код создан');
+    } catch { this.toast.error('Ошибка'); }
+    finally { this.inviteRegenerating = false; }
   }
 
   actTypeClass(type: number) {

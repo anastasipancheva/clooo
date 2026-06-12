@@ -16,6 +16,9 @@ public sealed class Course
     public string FinalGradingTableJson { get; set; } =
         """[{"min":233,"mark":"5+"},{"min":215,"mark":"5"},{"min":200,"mark":"5-"},{"min":183,"mark":"4+"},{"min":166,"mark":"4"},{"min":150,"mark":"4-"},{"min":131,"mark":"3+"},{"min":113,"mark":"3"},{"min":92,"mark":"3-"},{"min":75,"mark":"2+"},{"min":60,"mark":"2"},{"min":0,"mark":"2-"}]""";
 
+    /// <summary>Уникальный код приглашения (8 симв.). Студент может записаться только зная этот код.</summary>
+    public string InviteCode { get; set; } = null!;
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public List<Module> Modules { get; set; } = new();

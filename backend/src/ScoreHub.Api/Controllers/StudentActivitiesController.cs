@@ -75,15 +75,22 @@ public sealed class StudentActivitiesController : ApiControllerBase
         return Ok(new { teamId = membership.TeamId, teamName = membership.Name, tasks });
     }
 
-    /// <summary>Самостоятельная запись студента на курс.</summary>
+    /// <summary>Самостоятельная запись студента на курс по инвайт-коду.</summary>
     [HttpPost("courses/{courseId:guid}/enroll")]
-    public async Task<IActionResult> Enroll(Guid courseId, CancellationToken ct)
+    public async Task<IActionResult> Enroll(Guid courseId, [FromBody] EnrollDto dto, CancellationToken ct)
     {
         var uid = CurrentUserId;
         if (uid is null) return Unauthorized();
 
-        var courseExists = await _db.Courses.AnyAsync(c => c.Id == courseId, ct);
-        if (!courseExists) return NotFound();
+        var course = await _db.Courses.FirstOrDefaultAsync(c => c.Id == courseId, ct);
+        if (course is null) return NotFound();
+
+        // Validate invite code
+        if (string.IsNullOrWhiteSpace(dto.InviteCode) ||
+            !string.Equals(course.InviteCode, dto.InviteCode.Trim().ToLowerInvariant(), StringComparison.Ordinal))
+        {
+            return BadRequest(new { error = "Неверный код приглашения." });
+        }
 
         var exists = await _db.CourseEnrollments
             .AnyAsync(e => e.CourseId == courseId && e.UserId == uid.Value, ct);
@@ -101,9 +108,10 @@ public sealed class StudentActivitiesController : ApiControllerBase
         }
         catch (Microsoft.EntityFrameworkCore.DbUpdateException)
         {
-            // Race condition: another request enrolled between our check and save
             return Conflict(new { error = "Already enrolled" });
         }
         return Ok();
     }
+
+    public sealed record EnrollDto(string? InviteCode);
 }

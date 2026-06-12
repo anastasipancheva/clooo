@@ -40,7 +40,18 @@ export class ApiService {
     return this.get<{ id: string; email: string; displayName: string; role: string; enrolledAt: string }[]>
       (`/api/courses/${courseId}/students`);
   }
-  enrollCourse(courseId: string) { return this.post<void>(`/api/student/courses/${courseId}/enroll`); }
+  enrollCourse(courseId: string, inviteCode: string) {
+    return this.post<void>(`/api/student/courses/${courseId}/enroll`, { inviteCode });
+  }
+  getCourseByInvite(code: string) {
+    return this.get<{ id: string; code: string; title: string; academicYear: string }>(`/api/courses/by-invite/${code}`);
+  }
+  getCourseInvite(courseId: string) {
+    return this.get<{ inviteCode: string }>(`/api/teaching/courses/${courseId}/invite`);
+  }
+  regenerateCourseInvite(courseId: string) {
+    return this.post<{ inviteCode: string }>(`/api/teaching/courses/${courseId}/invite/regenerate`);
+  }
   courseStructure(courseId: string) { return this.get<CourseStructure>(`/api/teaching/courses/${courseId}/structure`); }
 
   // Student

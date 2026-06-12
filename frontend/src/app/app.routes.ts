@@ -2,6 +2,12 @@ import { Routes } from '@angular/router';
 import { authGuard, guestGuard } from './core/auth.guard';
 
 export const routes: Routes = [
+  // Public join page — no auth required
+  {
+    path: 'join/:code',
+    loadComponent: () => import('./pages/join/join.component').then(m => m.JoinComponent),
+  },
+
   // Guest routes
   {
     path: 'login',

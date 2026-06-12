@@ -50,6 +50,20 @@ public sealed class CoursesController : ControllerBase
         return Ok(list.Select(c => new { c.Id, c.Code, c.Title, c.AcademicYear, IsEnrolled = enrolledIds.Contains(c.Id) }));
     }
 
+    /// <summary>Получить информацию о курсе по инвайт-коду (для страницы вступления).</summary>
+    [HttpGet("by-invite/{code}")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ByInviteCode(string code, CancellationToken ct)
+    {
+        var course = await _db.Courses
+            .AsNoTracking()
+            .Where(c => c.InviteCode == code.ToLowerInvariant())
+            .Select(c => new { c.Id, c.Code, c.Title, c.AcademicYear })
+            .FirstOrDefaultAsync(ct);
+
+        return course is null ? NotFound(new { error = "Курс не найден или ссылка недействительна." }) : Ok(course);
+    }
+
     /// <summary>Список студентов, записанных на курс.</summary>
     [HttpGet("{courseId:guid}/students")]
     public async Task<IActionResult> GetStudents(Guid courseId, CancellationToken ct)
@@ -73,15 +87,26 @@ public sealed class CoursesController : ControllerBase
         return Ok(students);
     }
 
-    /// <summary>Записать текущего пользователя на курс (студент записывается сам).</summary>
+    /// <summary>Записать текущего пользователя на курс по инвайт-коду.</summary>
     [HttpPost("{courseId:guid}/enroll")]
-    public async Task<IActionResult> Enroll(Guid courseId, CancellationToken ct)
+    public async Task<IActionResult> Enroll(Guid courseId, [FromBody] EnrollDto dto, CancellationToken ct)
     {
         var uid = CurrentUserId;
         if (uid is null) return Unauthorized();
 
-        var exists = await _db.Courses.AnyAsync(c => c.Id == courseId, ct);
-        if (!exists) return NotFound(new { error = "Course not found." });
+        var course = await _db.Courses.FirstOrDefaultAsync(c => c.Id == courseId, ct);
+        if (course is null) return NotFound(new { error = "Course not found." });
+
+        // Validate invite code (teachers/admins bypass this check)
+        var isTeacherOrAdmin = User.IsInRole("Teacher") || User.IsInRole("Admin");
+        if (!isTeacherOrAdmin)
+        {
+            if (string.IsNullOrWhiteSpace(dto.InviteCode) ||
+                !string.Equals(course.InviteCode, dto.InviteCode.Trim().ToLowerInvariant(), StringComparison.Ordinal))
+            {
+                return BadRequest(new { error = "Неверный код приглашения." });
+            }
+        }
 
         var already = await _db.CourseEnrollments
             .AnyAsync(e => e.CourseId == courseId && e.UserId == uid.Value, ct);
@@ -97,4 +122,6 @@ public sealed class CoursesController : ControllerBase
         await _db.SaveChangesAsync(ct);
         return Ok();
     }
+
+    public sealed record EnrollDto(string? InviteCode);
 }

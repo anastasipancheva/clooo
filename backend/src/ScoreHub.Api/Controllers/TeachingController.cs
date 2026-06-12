@@ -122,6 +122,28 @@ public sealed class TeachingController : ApiControllerBase
         return FromOp(await _teaching.CreateCourse(uid.Value, dto.Code, dto.Title, dto.AcademicYear, ct));
     }
 
+    /// <summary>Получить инвайт-код и ссылку курса.</summary>
+    [HttpGet("courses/{courseId:guid}/invite")]
+    public async Task<IActionResult> GetInvite(Guid courseId, CancellationToken ct)
+    {
+        var course = await _db.Courses.AsNoTracking()
+            .Select(c => new { c.Id, c.InviteCode })
+            .FirstOrDefaultAsync(c => c.Id == courseId, ct);
+        if (course is null) return NotFound();
+        return Ok(new { inviteCode = course.InviteCode });
+    }
+
+    /// <summary>Регенерировать инвайт-код курса.</summary>
+    [HttpPost("courses/{courseId:guid}/invite/regenerate")]
+    public async Task<IActionResult> RegenerateInvite(Guid courseId, CancellationToken ct)
+    {
+        var course = await _db.Courses.FirstOrDefaultAsync(c => c.Id == courseId, ct);
+        if (course is null) return NotFound();
+        course.InviteCode = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(4)).ToLowerInvariant();
+        await _db.SaveChangesAsync(ct);
+        return Ok(new { inviteCode = course.InviteCode });
+    }
+
     /// <summary>Добавить модуль в курс (номер, название, даты модуля).</summary>
     [HttpPost("courses/{courseId:guid}/modules")]
     public async Task<IActionResult> AddModule(Guid courseId, [FromBody] AddModuleDto dto, CancellationToken ct)

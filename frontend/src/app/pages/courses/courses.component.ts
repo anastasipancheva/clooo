@@ -29,6 +29,41 @@ function defaultYear() {
         }
       </div>
 
+      <!-- Enrolled courses -->
+      @if (enrolledCourses.length > 0) {
+        <div class="space-y-3">
+          <p class="text-xs font-semibold text-[#6B7280] uppercase tracking-wide">Мои курсы</p>
+          @for (c of enrolledCourses; track c.id) {
+            <div class="bg-white rounded-xl border border-[#E5E7EB] p-4 flex items-center justify-between">
+              <div>
+                <p class="text-sm font-semibold text-[#1A1A1B]">{{ c.code }} — {{ c.title }}</p>
+                <p class="text-xs text-[#6B7280]">{{ c.academicYear }}</p>
+              </div>
+              <span class="flex items-center gap-1.5 text-xs text-[#059669] font-medium bg-[#D1FAE5] px-2.5 py-1 rounded-full">✓ Записан</span>
+            </div>
+          }
+        </div>
+      }
+
+      <!-- Not enrolled -->
+      @if (notEnrolledCourses.length > 0 && !auth.isTeacher()) {
+        <div class="space-y-3">
+          <p class="text-xs font-semibold text-[#6B7280] uppercase tracking-wide">Доступные курсы</p>
+          <div class="bg-[#F5F3FF] rounded-xl border border-[#DDD6FE] px-4 py-3">
+            <p class="text-xs text-[#7C3AED]">💡 Для записи на курс вам нужна ссылка-приглашение от преподавателя.</p>
+          </div>
+          @for (c of notEnrolledCourses; track c.id) {
+            <div class="bg-white rounded-xl border border-[#E5E7EB] p-4 flex items-center justify-between opacity-70">
+              <div>
+                <p class="text-sm font-semibold text-[#1A1A1B]">{{ c.code }} — {{ c.title }}</p>
+                <p class="text-xs text-[#6B7280]">{{ c.academicYear }}</p>
+              </div>
+              <span class="text-xs text-[#9CA3AF] font-medium">Нет доступа</span>
+            </div>
+          }
+        </div>
+      }
+
       @if (courseList.length === 0 && !loading()) {
         <div class="bg-white rounded-xl border border-[#E5E7EB] p-8 text-center">
           <p class="text-4xl mb-3">📖</p>
@@ -36,26 +71,21 @@ function defaultYear() {
         </div>
       }
 
-      <div class="space-y-3">
-        @for (c of courseList; track c.id) {
-          <div class="bg-white rounded-xl border border-[#E5E7EB] p-4 flex items-center justify-between">
-            <div>
-              <p class="text-sm font-semibold text-[#1A1A1B]">{{ c.code }} — {{ c.title }}</p>
-              <p class="text-xs text-[#6B7280]">{{ c.academicYear }}</p>
+      <!-- Teacher: all courses list -->
+      @if (auth.isTeacher() && courseList.length > 0) {
+        <div class="space-y-3">
+          @for (c of courseList; track c.id) {
+            <div class="bg-white rounded-xl border border-[#E5E7EB] p-4">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-sm font-semibold text-[#1A1A1B]">{{ c.code }} — {{ c.title }}</p>
+                  <p class="text-xs text-[#6B7280]">{{ c.academicYear }}</p>
+                </div>
+              </div>
             </div>
-            @if (!auth.isTeacher()) {
-              @if (c.isEnrolled) {
-                <span class="flex items-center gap-1.5 text-xs text-[#059669] font-medium">✓ Записан</span>
-              } @else {
-                <button (click)="enroll(c)" [disabled]="loading() === c.id"
-                  class="h-8 px-4 rounded-lg bg-[#005BFF] text-white text-xs font-medium hover:bg-[#0050E6] disabled:opacity-60 transition-colors">
-                  {{ loading() === c.id ? '...' : 'Записаться' }}
-                </button>
-              }
-            }
-          </div>
-        }
-      </div>
+          }
+        </div>
+      }
 
       <!-- Template apply modal -->
       @if (tplModal) {
@@ -124,25 +154,13 @@ export class CoursesComponent implements OnInit {
   tplTitle = '';
   tplYear = defaultYear();
 
+  get enrolledCourses() { return this.courseList.filter(c => c.isEnrolled); }
+  get notEnrolledCourses() { return this.courseList.filter(c => !c.isEnrolled); }
+
   ngOnInit() {
     this.api.listCourses().then(c => this.courseList = c).catch(() => {});
     if (this.auth.isTeacher()) {
       this.api.listTemplates().then(t => this.templates = t).catch(() => {});
-    }
-  }
-
-  async enroll(c: Course) {
-    this.loading.set(c.id);
-    try {
-      await this.api.enrollCourse(c.id);
-      c.isEnrolled = true;
-      this.toast.success('Вы записаны на курс');
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Ошибка';
-      if (msg.includes('Already enrolled')) { c.isEnrolled = true; this.toast.info('Вы уже записаны'); }
-      else this.toast.error(msg);
-    } finally {
-      this.loading.set(null);
     }
   }
 

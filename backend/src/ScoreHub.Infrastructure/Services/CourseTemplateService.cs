@@ -107,7 +107,8 @@ public sealed class CourseTemplateService(ScoreHubDbContext db) : ICourseTemplat
             Id = courseId,
             Code = req.CourseCode,
             Title = req.CourseTitle,
-            AcademicYear = req.AcademicYear
+            AcademicYear = req.AcademicYear,
+            InviteCode = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(4)).ToLowerInvariant()
         };
 
         var modules = template.Modules.OrderBy(m => m.Number).ToList();

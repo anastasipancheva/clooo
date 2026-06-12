@@ -138,6 +138,10 @@ namespace ScoreHub.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("InviteCode")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("KtMultiplierMapJson")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -147,6 +151,9 @@ namespace ScoreHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("InviteCode")
+                        .IsUnique();
 
                     b.ToTable("Courses");
                 });
