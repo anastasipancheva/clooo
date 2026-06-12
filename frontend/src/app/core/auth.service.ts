@@ -15,7 +15,7 @@ export class AuthService {
   loading = this._loading.asReadonly();
   isAuth = computed(() => this._user() !== null);
   role = computed(() => this._user()?.role ?? '');
-  isTeacher = computed(() => this.role() === 'Teacher' || this.role() === 'Admin');
+  isTeacher = computed(() => this.role() === 'Teacher');
   isAssistant = computed(() => this.role() === 'Assistant');
   isStudent = computed(() => this.role() === 'Student');
 

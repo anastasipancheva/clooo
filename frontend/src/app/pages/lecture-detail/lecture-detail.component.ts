@@ -1,11 +1,12 @@
-import { Component, inject, OnInit, OnDestroy, signal } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { Component, inject, OnInit, OnDestroy } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/api.service';
+import { AuthService } from '../../core/auth.service';
 import { SignalRService } from '../../core/signalr.service';
 import { ToastService } from '../../core/toast.service';
-import { MiniTestDto, MyTeamDto } from '../../core/models';
+import { MiniTestDto } from '../../core/models';
 import { Subscription } from 'rxjs';
 
 @Component({
@@ -13,7 +14,7 @@ import { Subscription } from 'rxjs';
   standalone: true,
   imports: [CommonModule, FormsModule],
   template: `
-    <div class="space-y-5">
+    <div class="space-y-5 max-w-2xl">
       <h1 class="text-lg font-semibold text-[#1A1A1B]">Лекция</h1>
 
       <!-- Mini-test active -->
@@ -21,9 +22,7 @@ import { Subscription } from 'rxjs';
         <div class="bg-white rounded-xl border border-[#C7DCFF] overflow-hidden">
           <div class="px-5 py-4 border-b border-[#C7DCFF] bg-[#EAF2FF] flex items-center justify-between">
             <span class="text-sm font-semibold text-[#005BFF]">Мини-тест</span>
-            <span class="text-sm font-mono font-bold text-[#D97706] bg-[#FEF3C7] px-2.5 py-1 rounded-lg">
-              {{ fmt(secondsLeft) }}
-            </span>
+            <span class="text-sm font-mono font-bold text-[#D97706] bg-[#FEF3C7] px-2.5 py-1 rounded-lg">{{ fmt(secondsLeft) }}</span>
           </div>
           <div class="p-5 space-y-5">
             @for (q of miniTest.questions; track q.id) {
@@ -53,65 +52,70 @@ import { Subscription } from 'rxjs';
         </div>
       }
 
-      <!-- Test submitted -->
       @if (testSubmitted) {
         <div class="bg-[#D1FAE5] border border-[#6EE7B7] rounded-xl px-5 py-4">
-          <p class="text-sm font-semibold text-[#059669]">Тест сдан!</p>
+          <p class="text-sm font-semibold text-[#059669]">✓ Тест сдан!</p>
         </div>
       }
 
-      <!-- Team actions -->
-      @if (team) {
-        <div class="bg-white rounded-xl border border-[#E5E7EB] p-5 space-y-4">
-          <div>
-            <p class="text-sm font-semibold text-[#1A1A1B] mb-1">{{ team.name }}</p>
-            <p class="text-xs text-[#6B7280] mb-3">
-              Вызовите ассистента на консультацию или отметьте задачу готовой.
-            </p>
-            <button (click)="callAssistant()"
-              class="h-10 px-5 rounded-lg border border-[#E5E7EB] text-sm text-[#6B7280] font-medium hover:border-[#005BFF] hover:text-[#005BFF] transition-colors">
-              📢 Позвать ассистента
-            </button>
-          </div>
+      <!-- Team actions: call assistant + mark task ready -->
+      <div class="bg-white rounded-xl border border-[#E5E7EB] p-5 space-y-4">
+        <p class="text-sm font-semibold text-[#1A1A1B]">Команда</p>
 
-          <!-- Tasks -->
-          @if (team.tasks.length > 0) {
-            <div class="border border-[#E5E7EB] rounded-lg overflow-hidden">
-              <div class="px-4 py-3 border-b border-[#E5E7EB] bg-[#F9FAFB]">
-                <p class="text-sm font-semibold text-[#1A1A1B]">Задачи</p>
-              </div>
-              <div class="divide-y divide-[#F3F4F6]">
-                @for (t of team.tasks; track t.id) {
-                  <div class="px-4 py-3">
-                    <div class="flex items-center justify-between gap-3 flex-wrap">
-                      <div>
-                        <span class="text-sm font-mono font-medium text-[#1A1A1B]">{{ t.code }}</span>
-                        <span class="text-xs text-[#6B7280] ml-2">{{ t.title }}</span>
-                      </div>
-                      <span class="text-xs font-medium px-2.5 py-1 rounded-full" [class]="taskStatusClass(t.status)">
-                        {{ taskStatusLabel(t.status) }}
-                      </span>
-                    </div>
-                    @if (t.status !== 'Accepted') {
-                      <div class="flex items-center gap-2 mt-2">
-                        <input type="number" min="1" max="10" placeholder="Оценка (1–10)"
-                          [(ngModel)]="taskScores[t.id]"
-                          class="h-8 w-32 px-3 rounded-lg border border-[#E5E7EB] text-sm outline-none focus:border-[#005BFF] focus:ring-2 focus:ring-[#005BFF]/10 transition" />
-                        <button (click)="markReady(t.id)"
-                          class="h-8 px-3 rounded-lg border border-[#E5E7EB] text-xs text-[#6B7280] font-medium hover:border-[#005BFF] hover:text-[#005BFF] transition-colors">
-                          Готовы сдать
-                        </button>
-                      </div>
-                    }
-                  </div>
-                }
-              </div>
+        @if (!teamId && !teamLoading) {
+          <p class="text-xs text-[#9CA3AF]">Вы ещё не в команде. Обратитесь к преподавателю.</p>
+        }
+        @if (teamLoading) {
+          <p class="text-xs text-[#9CA3AF] animate-pulse">Загрузка...</p>
+        }
+
+        @if (teamId) {
+          <!-- Call assistant -->
+          <button (click)="callAssistant()"
+            class="h-10 px-5 rounded-lg border border-[#E5E7EB] text-sm text-[#6B7280] font-medium hover:border-[#005BFF] hover:text-[#005BFF] transition-colors">
+            🙋 Позвать ассистента
+          </button>
+
+          <!-- Mark task ready with task number -->
+          <div class="space-y-2">
+            <p class="text-xs font-medium text-[#6B7280]">Отметить задачу готовой</p>
+            <div class="flex gap-2 items-center">
+              <input type="number" min="1" max="10" [(ngModel)]="taskNumber"
+                placeholder="№ задачи (1–10)"
+                class="w-36 h-9 px-3 rounded-lg border border-[#E5E7EB] text-sm outline-none focus:border-[#005BFF]" />
+              <button (click)="markReadyByNumber()" [disabled]="!taskNumber || taskNumber < 1 || taskNumber > 10"
+                class="h-9 px-4 rounded-lg bg-[#059669] text-white text-xs font-semibold hover:bg-[#047857] disabled:opacity-50 transition-colors">
+                ✓ Готово
+              </button>
             </div>
-          }
-        </div>
-      } @else if (!teamLoading) {
-        <div class="bg-white rounded-xl border border-[#E5E7EB] p-5">
-          <p class="text-sm text-[#9CA3AF]">Команда не найдена — возможно, вы ещё не распределены.</p>
+          </div>
+        }
+      </div>
+
+      <!-- Tasks list -->
+      @if (tasks.length > 0) {
+        <div class="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
+          <div class="px-5 py-4 border-b border-[#E5E7EB]">
+            <p class="text-sm font-semibold text-[#1A1A1B]">Задачи</p>
+          </div>
+          <div class="divide-y divide-[#F3F4F6]">
+            @for (t of tasks; track t.id) {
+              <div class="flex items-center justify-between px-5 py-3">
+                <span class="text-sm font-mono font-medium text-[#1A1A1B]">{{ t.code }}</span>
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-medium px-2.5 py-1 rounded-full" [class]="taskStatusClass(t.status)">
+                    {{ t.status }}
+                  </span>
+                  @if (t.status !== 'Accepted') {
+                    <button (click)="markReady(t.id)"
+                      class="h-8 px-3 rounded-lg border border-[#E5E7EB] text-xs text-[#6B7280] font-medium hover:border-[#005BFF] hover:text-[#005BFF] transition-colors">
+                      Готовы сдать
+                    </button>
+                  }
+                </div>
+              </div>
+            }
+          </div>
         </div>
       }
     </div>
@@ -119,14 +123,17 @@ import { Subscription } from 'rxjs';
 })
 export class LectureDetailComponent implements OnInit, OnDestroy {
   private route = inject(ActivatedRoute);
+  private router = inject(Router);
   private api = inject(ApiService);
+  private auth = inject(AuthService);
   private signalr = inject(SignalRService);
   private toast = inject(ToastService);
 
   activityId = '';
-  team: MyTeamDto | null = null;
+  teamId: string | null = null;
   teamLoading = true;
-  taskScores: Record<string, number | null> = {};
+  taskNumber: number | null = null;
+  tasks: { id: string; code: string; status: string }[] = [];
   miniTest: MiniTestDto | null = null;
   answers: Record<string, number> = {};
   testSubmitted = false;
@@ -136,8 +143,16 @@ export class LectureDetailComponent implements OnInit, OnDestroy {
 
   ngOnInit() {
     this.activityId = this.route.snapshot.paramMap.get('id') ?? '';
-    this.loadMiniTest();
+
+    // Redirect assistants to their own interface
+    if (this.auth.isAssistant()) {
+      this.router.navigate(['/assistant/session', this.activityId], { replaceUrl: true });
+      return;
+    }
+
     this.loadTeam();
+    this.loadMiniTest();
+
     this.sub = this.signalr.notification$.subscribe(payload => {
       if (payload.type === 'MiniTestOpened') this.loadMiniTest();
       if (payload.type === 'TaskAccepted') { this.toast.success(payload.title); this.loadTeam(); }
@@ -151,14 +166,13 @@ export class LectureDetailComponent implements OnInit, OnDestroy {
   }
 
   async loadTeam() {
+    this.teamLoading = true;
     try {
-      this.team = await this.api.myTeam(this.activityId);
-      this.team.tasks.forEach(t => { if (!(t.id in this.taskScores)) this.taskScores[t.id] = null; });
-    } catch {
-      this.team = null;
-    } finally {
-      this.teamLoading = false;
-    }
+      const data = await this.api.getMyTeam(this.activityId);
+      this.teamId = data.teamId;
+      this.tasks = data.tasks ?? [];
+    } catch { this.teamId = null; }
+    finally { this.teamLoading = false; }
   }
 
   async loadMiniTest() {
@@ -179,9 +193,7 @@ export class LectureDetailComponent implements OnInit, OnDestroy {
     }, 1000);
   }
 
-  setAnswer(questionId: string, idx: number) {
-    this.answers = { ...this.answers, [questionId]: idx };
-  }
+  setAnswer(questionId: string, idx: number) { this.answers = { ...this.answers, [questionId]: idx }; }
 
   async submitTest() {
     const ans = Object.entries(this.answers).map(([questionId, selectedOptionIndex]) => ({ questionId, selectedOptionIndex }));
@@ -189,52 +201,43 @@ export class LectureDetailComponent implements OnInit, OnDestroy {
       await this.api.submitMiniTest(this.activityId, ans);
       this.testSubmitted = true;
       this.toast.success('Тест сдан!');
-    } catch (e: unknown) {
-      this.toast.error(e instanceof Error ? e.message : 'Ошибка');
-    }
+    } catch (e: unknown) { this.toast.error(e instanceof Error ? e.message : 'Ошибка'); }
   }
 
   async callAssistant() {
-    if (!this.team) return;
+    if (!this.teamId) return;
     try {
-      await this.api.requestHelp(this.team.id);
+      await this.api.requestHelp(this.teamId);
       this.toast.success('Ассистент вызван!');
-    } catch (e: unknown) {
-      this.toast.error(e instanceof Error ? e.message : 'Ошибка');
-    }
+    } catch (e: unknown) { this.toast.error(e instanceof Error ? e.message : 'Ошибка'); }
+  }
+
+  async markReadyByNumber() {
+    if (!this.teamId || !this.taskNumber) return;
+    const task = this.tasks.find((_, i) => i + 1 === this.taskNumber)
+      ?? this.tasks.find(t => t.code.endsWith(String(this.taskNumber)));
+    if (!task) { this.toast.error(`Задача №${this.taskNumber} не найдена`); return; }
+    try {
+      await this.api.markTeamTaskReady(this.teamId, task.id);
+      this.toast.success(`Задача №${this.taskNumber} отмечена готовой`);
+    } catch (e: unknown) { this.toast.error(e instanceof Error ? e.message : 'Ошибка'); }
   }
 
   async markReady(taskItemId: string) {
-    if (!this.team) return;
-    const score = this.taskScores[taskItemId];
-    if (score === null || score === undefined || score < 1 || score > 10) {
-      this.toast.error('Введите оценку от 1 до 10');
-      return;
-    }
+    if (!this.teamId) return;
     try {
-      await this.api.markTeamTaskReady(this.team.id, taskItemId);
+      await this.api.markTeamTaskReady(this.teamId, taskItemId);
       this.toast.success('Ассистент уведомлён о готовности');
-    } catch (e: unknown) {
-      this.toast.error(e instanceof Error ? e.message : 'Ошибка');
-    }
+    } catch (e: unknown) { this.toast.error(e instanceof Error ? e.message : 'Ошибка'); }
   }
 
   fmt(s: number) { return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
-
-  taskStatusLabel(status: string) {
-    const map: Record<string, string> = {
-      Accepted: 'Принято', InReview: 'На проверке', Rejected: 'Не принято', NotStarted: 'Не начато',
-      ReadyForReview: 'Ожидает приёма'
-    };
-    return map[status] ?? status;
-  }
 
   taskStatusClass(status: string) {
     const map: Record<string, string> = {
       Accepted: 'bg-[#D1FAE5] text-[#059669]',
       InReview: 'bg-[#EAF2FF] text-[#005BFF]',
       Rejected: 'bg-[#FEE2E2] text-[#DC2626]',
-      ReadyForReview: 'bg-[#FEF3C7] text-[#D97706]',
     };
     return map[status] ?? 'bg-[#F3F4F6] text-[#6B7280]';
   }

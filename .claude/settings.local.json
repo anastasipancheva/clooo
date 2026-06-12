@@ -67,7 +67,23 @@
       "Bash(curl -s -X POST http://localhost:5062/api/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"tteacher1778431245@test.com\",\"password\":\"password123\"}')",
       "Bash(xargs cat)",
       "Bash(git pull *)",
-      "Bash(git stash *)"
+      "Bash(git stash *)",
+      "Bash(grep -v \"//\\\\|using\\\\|^\\\\s*//\")",
+      "Bash(cat Dockerfile)",
+      "Bash(cat railway.json)",
+      "Bash(cat railway.toml)",
+      "Bash(dir \"C:\\\\Users\\\\User\\\\Desktop\\\\ScoreHub_Projec\\\\frontend-angular\\\\src\\\\app\" /s /b)",
+      "Bash(findstr \"\\\\.ts$\")",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\User\\\\Desktop\\\\ScoreHub_Projec\\\\frontend-angular\\\\src\\\\app\" -Recurse -Filter \"*.ts\")",
+      "Bash(Select-Object FullName)",
+      "Bash(node_modules/.bin/ng build *)",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "Bash(pip show *)",
+      "Bash(pip install *)",
+      "Bash(python make_doc.py)",
+      "Bash(git commit *)",
+      "Bash(grep \"\\\\.cs$\")",
+      "Bash(git restore *)"
     ]
   }
 }

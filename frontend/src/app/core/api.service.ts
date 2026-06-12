@@ -57,6 +57,10 @@ export class ApiService {
   }
 
   // Teams (student)
+  getMyTeam(activityId: string) {
+    return this.get<{ teamId: string; teamName: string; tasks: { id: string; code: string; status: string }[] }>(
+      `/api/activities/${activityId}/my-team`);
+  }
   requestHelp(teamId: string, message?: string) { return this.post<{ id: string }>(`/api/teams/${teamId}/help-requests`, { message }); }
   markTeamTaskReady(teamId: string, taskItemId: string) { return this.post<void>(`/api/teams/${teamId}/tasks/${taskItemId}/ready`); }
 

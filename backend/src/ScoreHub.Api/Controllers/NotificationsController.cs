@@ -28,6 +28,8 @@ public sealed class NotificationsController : ApiControllerBase
         var items = await _db.Notifications
             .AsNoTracking()
             .Where(n => n.RecipientId == uid.Value)
+            .OrderByDescending(n => n.CreatedAt)
+            .Take(100)
             .Select(n => new
             {
                 n.Id,
@@ -38,9 +40,6 @@ public sealed class NotificationsController : ApiControllerBase
                 n.ReadAt
             })
             .ToListAsync(ct);
-
-        // Sort in memory — SQLite cannot ORDER BY DateTimeOffset directly
-        items = [.. items.OrderByDescending(n => n.CreatedAt).Take(100)];
 
         return Ok(items);
     }

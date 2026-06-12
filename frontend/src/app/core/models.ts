@@ -55,7 +55,7 @@ export interface ActivityTeam {
 export interface AssistantSession {
   id: string; activityId: string; activityTitle: string; activityType: string; activityStatus: string;
   activityStartsAt: string; moduleId: string; moduleNumber: number; moduleTitle: string;
-  courseId: string; courseCode: string; courseTitle: string;
+  courseId: string; courseCode: string; courseTitle: string; status?: string;
 }
 
 export interface CourseModule {

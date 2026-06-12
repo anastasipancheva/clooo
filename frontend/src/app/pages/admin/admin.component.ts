@@ -62,21 +62,6 @@ function defaultAcademicYear() {
       <!-- ══ TAB: COURSES ══ -->
       @if (tab === 'courses') {
         <div class="space-y-5">
-          <!-- Create mode switcher -->
-          <div class="flex gap-1 bg-[#F3F4F6] rounded-lg p-1 w-fit">
-            <button (click)="courseCreateMode = 'blank'"
-              class="px-4 py-1.5 rounded-md text-sm font-medium transition-colors"
-              [class]="courseCreateMode === 'blank' ? 'bg-white text-[#005BFF] shadow-sm' : 'text-[#6B7280] hover:text-[#1A1A1B]'">
-              Создать курс
-            </button>
-            <button (click)="courseCreateMode = 'template'; loadTemplates()"
-              class="px-4 py-1.5 rounded-md text-sm font-medium transition-colors"
-              [class]="courseCreateMode === 'template' ? 'bg-white text-[#005BFF] shadow-sm' : 'text-[#6B7280] hover:text-[#1A1A1B]'">
-              📋 Из шаблона
-            </button>
-          </div>
-
-          @if (courseCreateMode === 'blank') {
           <div class="bg-white rounded-xl border border-[#E5E7EB] p-5">
             <p class="text-xs font-semibold text-[#6B7280] uppercase tracking-wide mb-3">Создать курс</p>
             <div class="flex flex-wrap gap-3 items-end">
@@ -95,50 +80,6 @@ function defaultAcademicYear() {
               <button (click)="createCourse()" [class]="BTN_PRIMARY">➕ Создать</button>
             </div>
           </div>
-          }
-
-          @if (courseCreateMode === 'template') {
-          <div class="bg-white rounded-xl border border-[#E5E7EB] p-5 space-y-4">
-            <p class="text-xs font-semibold text-[#6B7280] uppercase tracking-wide">Выберите шаблон</p>
-            @if (templatesLoading) { <p class="text-sm text-[#9CA3AF] animate-pulse">Загрузка шаблонов...</p> }
-            @if (!templatesLoading && templates.length === 0) {
-              <p class="text-sm text-[#9CA3AF]">Нет шаблонов. Создайте их на вкладке 📋 Шаблоны.</p>
-            }
-            <div class="space-y-2">
-              @for (tpl of templates; track tpl.id) {
-                <button (click)="openApplyDialog(tpl)"
-                  class="w-full text-left px-4 py-3 rounded-lg border transition-colors hover:border-[#005BFF]/40"
-                  [class]="applyTpl?.id === tpl.id ? 'border-[#005BFF] bg-[#EAF2FF]' : 'border-[#E5E7EB]'">
-                  <p class="text-sm font-semibold text-[#1A1A1B]">{{ tpl.title }}</p>
-                  <p class="text-xs text-[#9CA3AF]">{{ tpl.moduleCount }} модул. · {{ tpl.activityCount }} занятий</p>
-                </button>
-              }
-            </div>
-            @if (applyTpl) {
-              <div class="border-t border-[#E5E7EB] pt-4 space-y-3">
-                <p class="text-xs font-semibold text-[#6B7280]">Параметры нового курса — {{ applyTpl.title }}</p>
-                <div class="flex flex-wrap gap-3 items-end">
-                  <div>
-                    <label class="block text-xs text-[#6B7280] mb-1">Код *</label>
-                    <input [class]="INPUT + ' w-24'" [(ngModel)]="applyCode" placeholder="WEB-25" />
-                  </div>
-                  <div>
-                    <label class="block text-xs text-[#6B7280] mb-1">Название *</label>
-                    <input [class]="INPUT + ' w-56'" [(ngModel)]="applyTitle" placeholder="Веб-разработка 2025" />
-                  </div>
-                  <div>
-                    <label class="block text-xs text-[#6B7280] mb-1">Учебный год *</label>
-                    <input [class]="INPUT + ' w-28'" [(ngModel)]="applyYear" />
-                  </div>
-                  <button (click)="applyTemplate()" [disabled]="applying || !applyCode || !applyTitle" [class]="BTN_PRIMARY">
-                    {{ applying ? '⏳...' : '▶ Создать курс' }}
-                  </button>
-                  <button (click)="applyTpl = null" [class]="BTN_GHOST">Отмена</button>
-                </div>
-              </div>
-            }
-          </div>
-          }
 
           @if (courseList.length > 0) {
             <div class="bg-white rounded-xl border border-[#E5E7EB] p-5">
@@ -422,39 +363,37 @@ function defaultAcademicYear() {
                   <p class="text-sm font-semibold text-[#1A1A1B]">Записаны на курс ({{ courseStudents.length }})</p>
                   <button (click)="loadStudents()" [class]="BTN_GHOST">🔄 Обновить</button>
                 </div>
-                @if (courseStudents.length === 0) {
-                  <p class="px-5 py-4 text-sm text-[#9CA3AF]">Нет участников на этом курсе</p>
+                @if (courseStudentsOnly.length === 0 && courseAssistants.length === 0) {
+                  <p class="px-5 py-4 text-sm text-[#9CA3AF]">Нет записанных на этом курсе</p>
                 } @else {
-                  <!-- Assistants block -->
-                  @if (enrolledAssistants.length > 0) {
-                    <div class="px-5 py-2 bg-[#FFFBEB] border-b border-[#FDE68A]">
-                      <p class="text-xs font-semibold text-[#D97706] uppercase tracking-wide mb-1">Ассистенты ({{ enrolledAssistants.length }})</p>
+                  @if (courseStudentsOnly.length > 0) {
+                    <div class="px-5 py-2 bg-[#F9FAFB] border-b border-[#E5E7EB]">
+                      <p class="text-xs font-semibold text-[#6B7280] uppercase tracking-wide">Студенты ({{ courseStudentsOnly.length }})</p>
                     </div>
                     <div class="divide-y divide-[#F3F4F6]">
-                      @for (u of enrolledAssistants; track u.id) {
-                        <div class="flex items-center justify-between px-5 py-3 bg-[#FFFBEB]/40">
-                          <div>
-                            <p class="text-sm font-medium text-[#1A1A1B]">{{ u.displayName }}</p>
-                            <p class="text-xs text-[#6B7280]">{{ u.email }}</p>
-                          </div>
-                          <span class="text-xs text-[#D97706] bg-[#FEF3C7] px-2 py-0.5 rounded-full font-medium">Ассистент</span>
-                        </div>
-                      }
-                    </div>
-                  }
-                  <!-- Students block -->
-                  @if (enrolledStudents.length > 0) {
-                    <div class="px-5 py-2 bg-[#F0F9FF] border-b border-[#BAE6FD]">
-                      <p class="text-xs font-semibold text-[#0284C7] uppercase tracking-wide mb-1">Студенты ({{ enrolledStudents.length }})</p>
-                    </div>
-                    <div class="divide-y divide-[#F3F4F6]">
-                      @for (u of enrolledStudents; track u.id) {
+                      @for (u of courseStudentsOnly; track u.id) {
                         <div class="flex items-center justify-between px-5 py-3">
                           <div>
                             <p class="text-sm font-medium text-[#1A1A1B]">{{ u.displayName }}</p>
                             <p class="text-xs text-[#6B7280]">{{ u.email }}</p>
                           </div>
-                          <span class="text-xs text-[#6B7280] bg-[#F3F4F6] px-2 py-0.5 rounded">Студент</span>
+                          <span class="text-xs text-[#059669] bg-[#D1FAE5] px-2 py-0.5 rounded-full">Студент</span>
+                        </div>
+                      }
+                    </div>
+                  }
+                  @if (courseAssistants.length > 0) {
+                    <div class="px-5 py-2 bg-[#FFFBEB] border-y border-[#FDE68A]">
+                      <p class="text-xs font-semibold text-[#D97706] uppercase tracking-wide">Ассистенты ({{ courseAssistants.length }})</p>
+                    </div>
+                    <div class="divide-y divide-[#F3F4F6]">
+                      @for (u of courseAssistants; track u.id) {
+                        <div class="flex items-center justify-between px-5 py-3">
+                          <div>
+                            <p class="text-sm font-medium text-[#1A1A1B]">{{ u.displayName }}</p>
+                            <p class="text-xs text-[#6B7280]">{{ u.email }}</p>
+                          </div>
+                          <span class="text-xs text-[#D97706] bg-[#FEF3C7] px-2 py-0.5 rounded-full">Ассистент</span>
                         </div>
                       }
                     </div>
@@ -513,7 +452,6 @@ function defaultAcademicYear() {
                           <option value="Student">Студент</option>
                           <option value="Assistant">Ассистент</option>
                           <option value="Teacher">Преподаватель</option>
-
                         </select>
                       </div>
                     </div>
@@ -771,12 +709,9 @@ function defaultAcademicYear() {
                 <div class="border border-[#E5E7EB] rounded-xl p-4 space-y-3 bg-[#FAFAFA]">
                   <div class="flex items-center gap-3 flex-wrap">
                     <span class="text-xs font-bold text-[#6B7280] w-6">М{{ mi + 1 }}</span>
-                    <input [class]="INPUT + ' flex-1 min-w-36'" [(ngModel)]="m.title" placeholder="Название модуля" />
-                    <div class="flex items-center gap-2">
-                      <input [class]="INPUT + ' w-36'" type="date" [(ngModel)]="m.startsAt" title="Начало модуля" />
-                      <span class="text-xs text-[#9CA3AF]">—</span>
-                      <input [class]="INPUT + ' w-36'" type="date" [(ngModel)]="m.endsAt" title="Конец модуля" />
-                    </div>
+                    <input [class]="INPUT + ' flex-1 min-w-40'" [(ngModel)]="m.title" placeholder="Название модуля" />
+                    <input [class]="INPUT + ' w-36'" type="date" [(ngModel)]="m.startsAt" title="Начало модуля" />
+                    <input [class]="INPUT + ' w-36'" type="date" [(ngModel)]="m.endsAt" title="Конец модуля" />
                     <button (click)="tplRemoveModule(mi)" class="text-[#EF4444] text-xs hover:underline">✕</button>
                   </div>
 
@@ -785,7 +720,7 @@ function defaultAcademicYear() {
                     @for (a of m.activities; track a; let ai = $index) {
                       <div class="flex items-center gap-2 flex-wrap">
                         <select [class]="INPUT + ' w-28'" [(ngModel)]="a.type">
-                          <option value="1">Лекция</option>
+                          <option value="0">Лекция</option>
                           <option value="2">КТ</option>
                           <option value="3">ДЗ</option>
                         </select>
@@ -912,7 +847,6 @@ export class AdminComponent implements OnInit {
   tab: Tab = 'courses';
   courseList: Course[] = [];
   selected: string | null = null;
-  courseCreateMode: 'blank' | 'template' = 'blank';
 
   // Courses tab
   newCode = ''; newTitle = ''; newYear = defaultAcademicYear();
@@ -979,10 +913,9 @@ export class AdminComponent implements OnInit {
 
   get allStudents() { return this.allUsers.filter(u => u.role === 'Student'); }
   get allStaff() { return this.allUsers.filter(u => ['Teacher', 'Assistant'].includes(u.role)); }
+  get courseStudentsOnly() { return this.courseStudents.filter(u => u.role === 'Student'); }
+  get courseAssistants() { return this.courseStudents.filter(u => u.role === 'Assistant'); }
   get lectureActivities() { return this.scheduleActivities.filter(a => a.typeLabel === 'Лекция'); }
-  get enrolledStudents() { return this.courseStudents.filter(u => u.role === 'Student'); }
-  get enrolledAssistants() { return this.courseStudents.filter(u => u.role === 'Assistant'); }
-  // Teachers are auto-enrolled and excluded from the enrolled list
 
   ngOnInit() { this.loadCourses(); }
 
@@ -1213,8 +1146,7 @@ export class AdminComponent implements OnInit {
     try {
       const r = await this.api.autoGenerate(this.teamsActivityId, sz);
       this.toast.success(`Создано ${r.teamCount} команд (${r.studentCount} студентов)`);
-      // Reload teams via API to ensure latest data (including assistant assignments)
-      await this.onTeamsActivityChange(this.teamsActivityId);
+      this.teams = [...r.teams];
     } catch (e: unknown) { this.toast.error(e instanceof Error ? e.message : 'Ошибка'); }
     finally { this.generating = false; }
   }
@@ -1321,8 +1253,7 @@ export class AdminComponent implements OnInit {
     return map[type] ?? 'bg-[#F3F4F6] text-[#6B7280]';
   }
   actTypeLabelNum(type: number) {
-    const map: Record<number, string> = { 1: 'Лекция', 2: 'КТ', 3: 'ДЗ' };
-    return map[type] ?? 'Занятие';
+    return ['Лекция', 'Практика', 'КТ', 'ДЗ'][type] ?? 'Занятие';
   }
   fmtDateShort(d: string) { return new Date(d).toLocaleDateString('ru', { day: 'numeric', month: 'short', year: 'numeric' }); }
 

@@ -18,7 +18,7 @@ import { StudentActivity, Course, StudentScore } from '../../core/models';
         <h1 class="text-xl font-bold">{{ auth.user()?.displayName }}</h1>
         <p class="text-sm opacity-70 mt-0.5">
           {{ auth.isAssistant() ? 'Ассистент' : 'Студент' }}
-          @if (courseList.length > 0) { · {{ courseList.length }} {{ plural(courseList.length, 'курс', 'курса', 'курсов') }} }
+          @if (enrolledCount > 0) { · {{ enrolledCount }} {{ plural(enrolledCount, 'курс', 'курса', 'курсов') }} }
         </p>
       </div>
 
@@ -159,8 +159,10 @@ export class DashboardComponent implements OnInit {
   get active() { return this.activities.filter(a => a.status === 'Active'); }
   get upcoming() { return this.activities.filter(a => a.status === 'Scheduled').slice(0, 4); }
 
+  get enrolledCount() { return this.courseList.filter(c => c.isEnrolled).length; }
+
   get scoresByCourse() {
-    return this.courseList.map(c => {
+    return this.courseList.filter(c => c.isEnrolled).map(c => {
       const scores = this.allScores.get(c.id) ?? [];
       const myId = this.auth.user()?.id;
       const me = scores.find(s => s.studentId === myId);
@@ -188,9 +190,9 @@ export class DashboardComponent implements OnInit {
     if (acts.status === 'fulfilled') this.activities = acts.value;
     if (courses.status === 'fulfilled') {
       this.courseList = courses.value;
-      // load scores for each enrolled course
+      // load scores for enrolled courses only
       if (!this.auth.isAssistant()) {
-        for (const c of courses.value) {
+        for (const c of courses.value.filter(c => c.isEnrolled)) {
           this.api.courseScores(c.id).then(s => this.allScores.set(c.id, s)).catch(() => {});
         }
       }

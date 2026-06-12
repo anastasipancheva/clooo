@@ -29,18 +29,17 @@ public sealed class CoursesController : ControllerBase
         }
     }
 
-    /// <summary>Список всех курсов: Id, Code, Title, AcademicYear + isEnrolled для текущего пользователя.</summary>
+    /// <summary>Список всех курсов: Id, Code, Title, AcademicYear, IsEnrolled.</summary>
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<object>>> List(CancellationToken ct)
     {
         var uid = CurrentUserId;
-
-        var enrolledIds = uid.HasValue
-            ? await _db.CourseEnrollments
+        var enrolledIds = uid is null
+            ? new HashSet<Guid>()
+            : (await _db.CourseEnrollments
                 .Where(e => e.UserId == uid.Value)
                 .Select(e => e.CourseId)
-                .ToListAsync(ct)
-            : new List<Guid>();
+                .ToListAsync(ct)).ToHashSet();
 
         var list = await _db.Courses
             .AsNoTracking()
@@ -74,4 +73,28 @@ public sealed class CoursesController : ControllerBase
         return Ok(students);
     }
 
+    /// <summary>Записать текущего пользователя на курс (студент записывается сам).</summary>
+    [HttpPost("{courseId:guid}/enroll")]
+    public async Task<IActionResult> Enroll(Guid courseId, CancellationToken ct)
+    {
+        var uid = CurrentUserId;
+        if (uid is null) return Unauthorized();
+
+        var exists = await _db.Courses.AnyAsync(c => c.Id == courseId, ct);
+        if (!exists) return NotFound(new { error = "Course not found." });
+
+        var already = await _db.CourseEnrollments
+            .AnyAsync(e => e.CourseId == courseId && e.UserId == uid.Value, ct);
+
+        if (already) return Conflict(new { error = "Already enrolled." });
+
+        _db.CourseEnrollments.Add(new CourseEnrollment
+        {
+            CourseId = courseId,
+            UserId = uid.Value,
+            EnrolledAt = DateTimeOffset.UtcNow
+        });
+        await _db.SaveChangesAsync(ct);
+        return Ok();
+    }
 }
