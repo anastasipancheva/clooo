@@ -57,6 +57,12 @@ public sealed class TeachingSetupService : ITeachingSetupService
         if (!await _db.Courses.AnyAsync(c => c.Id == courseId, ct))
             return OpResult<Guid>.Fail("Курс не найден.");
 
+        if (endsAt < startsAt)
+            return OpResult<Guid>.Fail("Дата окончания модуля раньше даты начала.");
+
+        if (await _db.Modules.AnyAsync(x => x.CourseId == courseId && x.Number == number, ct))
+            return OpResult<Guid>.Fail($"Модуль с номером {number} уже существует в этом курсе.");
+
         var m = new Module
         {
             Id = Guid.NewGuid(),
@@ -84,8 +90,15 @@ public sealed class TeachingSetupService : ITeachingSetupService
         if (actor is null || !CanTeach(actor.Role))
             return OpResult<Guid>.Fail("Недостаточно прав.");
 
-        if (!await _db.Modules.AnyAsync(x => x.Id == moduleId, ct))
+        var module = await _db.Modules.FirstOrDefaultAsync(x => x.Id == moduleId, ct);
+        if (module is null)
             return OpResult<Guid>.Fail("Модуль не найден.");
+
+        if (endsAt < startsAt)
+            return OpResult<Guid>.Fail("Дата окончания занятия раньше даты начала.");
+
+        if (startsAt < module.StartsAt || endsAt > module.EndsAt)
+            return OpResult<Guid>.Fail("Даты занятия должны быть внутри дат модуля.");
 
         var a = new Activity
         {

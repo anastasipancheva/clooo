@@ -25,11 +25,10 @@ public sealed class NotificationsController : ApiControllerBase
         var uid = CurrentUserId;
         if (uid is null) return Unauthorized();
 
-        var items = await _db.Notifications
+        // SQLite не поддерживает ORDER BY по DateTimeOffset — сортируем и ограничиваем в памяти.
+        var items = (await _db.Notifications
             .AsNoTracking()
             .Where(n => n.RecipientId == uid.Value)
-            .OrderByDescending(n => n.CreatedAt)
-            .Take(100)
             .Select(n => new
             {
                 n.Id,
@@ -39,7 +38,10 @@ public sealed class NotificationsController : ApiControllerBase
                 n.CreatedAt,
                 n.ReadAt
             })
-            .ToListAsync(ct);
+            .ToListAsync(ct))
+            .OrderByDescending(n => n.CreatedAt)
+            .Take(100)
+            .ToList();
 
         return Ok(items);
     }

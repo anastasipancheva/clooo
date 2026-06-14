@@ -158,17 +158,33 @@ public sealed class CourseTemplateService(ScoreHubDbContext db) : ICourseTemplat
             };
 
             var actList = mt.Activities.ToList();
+            var moduleSpan = moduleEnd - moduleStart;
             for (int ai = 0; ai < actList.Count; ai++)
             {
                 var at = actList[ai];
-                var actStart = moduleStart.AddDays(ai * 7);
-                var actEnd   = actStart.AddHours(2);
+
+                // Распределяем занятия равномерно ВНУТРИ окна модуля, чтобы даты занятий
+                // не выходили за границы модуля. Длительность — 2 часа, но конец зажимаем
+                // по концу модуля.
+                var offset = (actList.Count > 1 && moduleSpan > TimeSpan.Zero)
+                    ? TimeSpan.FromTicks(moduleSpan.Ticks * ai / actList.Count)
+                    : TimeSpan.Zero;
+                var actStart = moduleStart + offset;
+                if (actStart > moduleEnd) actStart = moduleStart;
+                var actEnd = actStart.AddHours(2);
+                if (actEnd > moduleEnd) actEnd = moduleEnd;
+
+                // Тип из шаблона. Если в шаблоне сохранено невалидное значение
+                // (например, из старого/ручного билдера) — считаем лекцией.
+                var actType = Enum.IsDefined(typeof(ActivityType), at.Type)
+                    ? (ActivityType)at.Type
+                    : ActivityType.Lecture;
 
                 var activity = new Activity
                 {
                     Id = Guid.NewGuid(),
                     ModuleId = module.Id,
-                    Type = (ActivityType)at.Type,
+                    Type = actType,
                     Title = at.Title,
                     Status = ActivityStatus.Scheduled,
                     StartsAt = actStart,

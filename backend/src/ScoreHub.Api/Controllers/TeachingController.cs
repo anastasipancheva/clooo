@@ -235,6 +235,21 @@ public sealed class TeachingController : ApiControllerBase
             .FirstOrDefaultAsync(a => a.Id == activityId, ct);
         if (activity is null) return NotFound();
 
+        if (activity.Status == ActivityStatus.Finished)
+            return BadRequest(new { error = "Занятие уже завершено." });
+
+        // #11 — нельзя начать занятие, время которого уже прошло.
+        if (activity.EndsAt < DateTimeOffset.UtcNow)
+            return BadRequest(new { error = "Нельзя начать занятие, время которого уже прошло." });
+
+        // #9 — командные занятия (лекция / ДЗ-сессия) нельзя начать без команд.
+        if (activity.Type is ActivityType.Lecture or ActivityType.HomeworkSession)
+        {
+            var hasTeams = await _db.Teams.AnyAsync(t => t.ActivityId == activityId, ct);
+            if (!hasTeams)
+                return BadRequest(new { error = "Сначала сформируйте команды для занятия." });
+        }
+
         activity.Status = ActivityStatus.Active;
         await _db.SaveChangesAsync(ct);
 
@@ -450,11 +465,19 @@ public sealed class TeachingController : ApiControllerBase
     [HttpPatch("activities/{activityId:guid}")]
     public async Task<IActionResult> PatchActivity(Guid activityId, [FromBody] PatchActivityDto dto, CancellationToken ct)
     {
-        var activity = await _db.Activities.FirstOrDefaultAsync(a => a.Id == activityId, ct);
+        var activity = await _db.Activities.Include(a => a.Module).FirstOrDefaultAsync(a => a.Id == activityId, ct);
         if (activity is null) return NotFound();
+
+        var newStart = dto.StartsAt ?? activity.StartsAt;
+        var newEnd   = dto.EndsAt   ?? activity.EndsAt;
+        if (newEnd < newStart)
+            return BadRequest(new { error = "Дата окончания занятия раньше даты начала." });
+        if (newStart < activity.Module.StartsAt || newEnd > activity.Module.EndsAt)
+            return BadRequest(new { error = "Даты занятия должны быть внутри дат модуля." });
+
         if (dto.Title is not null)    activity.Title    = dto.Title.Trim();
-        if (dto.StartsAt.HasValue)    activity.StartsAt = dto.StartsAt.Value;
-        if (dto.EndsAt.HasValue)      activity.EndsAt   = dto.EndsAt.Value;
+        activity.StartsAt = newStart;
+        activity.EndsAt   = newEnd;
         await _db.SaveChangesAsync(ct);
         return Ok();
     }

@@ -20,8 +20,10 @@ public sealed class GroupActivityService : IGroupActivityService
 
     private static bool IsGroupActivity(ActivityType t) => t is ActivityType.Lecture or ActivityType.HomeworkSession;
 
-    private static bool WithinWindow(Activity a) =>
-        DateTimeOffset.UtcNow >= a.StartsAt && DateTimeOffset.UtcNow <= a.EndsAt;
+    // Занятие «открыто» для командных действий, когда преподаватель его запустил (Status = Active).
+    // Привязываться к расписанию (StartsAt/EndsAt) нельзя: преподаватель стартует пару вручную,
+    // и реальное время может не совпадать с плановым окном.
+    private static bool IsLive(Activity a) => a.Status == ActivityStatus.Active;
 
     private static bool CanAssist(UserRole r) => r is UserRole.Assistant or UserRole.Teacher or UserRole.Admin;
 
@@ -41,8 +43,8 @@ public sealed class GroupActivityService : IGroupActivityService
         if (!IsGroupActivity(team.Activity.Type))
             return OpResult<Guid>.Fail("Это занятие не для командной работы.");
 
-        if (!WithinWindow(team.Activity))
-            return OpResult<Guid>.Fail("Вне времени занятия.");
+        if (!IsLive(team.Activity))
+            return OpResult<Guid>.Fail("Занятие не запущено преподавателем.");
 
         if (team.Members.All(m => m.UserId != actorId))
             return OpResult<Guid>.Fail("Вы не в этой команде.");
@@ -87,8 +89,8 @@ public sealed class GroupActivityService : IGroupActivityService
         if (!IsGroupActivity(team.Activity.Type))
             return OpResult<Unit>.Fail("Неверный тип занятия.");
 
-        if (!WithinWindow(team.Activity))
-            return OpResult<Unit>.Fail("Вне времени занятия.");
+        if (!IsLive(team.Activity))
+            return OpResult<Unit>.Fail("Занятие не запущено преподавателем.");
 
         if (team.Members.All(m => m.UserId != actorId))
             return OpResult<Unit>.Fail("Вы не в этой команде.");
@@ -265,8 +267,8 @@ public sealed class GroupActivityService : IGroupActivityService
         if (!IsGroupActivity(sub.Activity.Type))
             return OpResult<Unit>.Fail("Неверный тип занятия.");
 
-        if (!WithinWindow(sub.Activity))
-            return OpResult<Unit>.Fail("Вне времени занятия.");
+        if (!IsLive(sub.Activity))
+            return OpResult<Unit>.Fail("Занятие не запущено преподавателем.");
 
         if (sub.Status != SubmissionStatus.ReadyForReview)
             return OpResult<Unit>.Fail("Сдача не в статусе ожидания.");
@@ -332,8 +334,8 @@ public sealed class GroupActivityService : IGroupActivityService
         if (!isReviewer && !isElevated)
             return OpResult<Unit>.Fail("Только принявший может завершить проверку.");
 
-        if (!WithinWindow(sub.Activity) && !isElevated)
-            return OpResult<Unit>.Fail("Вне времени занятия.");
+        if (!IsLive(sub.Activity) && !isElevated)
+            return OpResult<Unit>.Fail("Занятие не запущено преподавателем.");
 
         sub.Status = accepted ? SubmissionStatus.Accepted : SubmissionStatus.Rejected;
         sub.Result01 = accepted ? 1 : 0;
