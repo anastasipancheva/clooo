@@ -43,6 +43,7 @@ export interface AssistantApplicationDto {
 export interface TeacherActivity {
   id: string; title: string; type: number; typeLabel: string; status: string;
   startsAt: string; endsAt: string; preLectureVideoUrl?: string; theoryTestUrl?: string; taskFileUrl?: string;
+  taskCount?: number;
   moduleTitle: string; moduleNumber: number; moduleId: string;
 }
 

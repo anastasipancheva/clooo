@@ -4,6 +4,7 @@ import { CommonModule } from '@angular/common';
 import { ApiService } from '../../core/api.service';
 import { AuthService } from '../../core/auth.service';
 import { StudentActivity, Course, StudentScore } from '../../core/models';
+import { activityTypeIcon, activityTypeIconBg } from '../../core/activity-type';
 
 @Component({
   selector: 'app-dashboard',
@@ -157,7 +158,14 @@ export class DashboardComponent implements OnInit {
   loading = true;
 
   get active() { return this.activities.filter(a => a.status === 'Active'); }
-  get upcoming() { return this.activities.filter(a => a.status === 'Scheduled').slice(0, 4); }
+  // #6 — «предстоящие»: только запланированные и ещё не прошедшие (не завершённые).
+  get upcoming() {
+    const now = Date.now();
+    return this.activities
+      .filter(a => a.status === 'Scheduled' && new Date(a.endsAt).getTime() > now)
+      .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
+      .slice(0, 4);
+  }
 
   get enrolledCount() { return this.courseList.filter(c => c.isEnrolled).length; }
 
@@ -206,10 +214,8 @@ export class DashboardComponent implements OnInit {
     return a.type === 2 ? `/kt/${a.id}` : `/lecture/${a.id}`;
   }
 
-  actIcon(type: number) { return ['\u{1F4D6}', '\u{1F9EA}', '\u{1F4DD}', '\u{1F4DA}'][type] ?? '\u{1F4C5}'; }
-  actIconBg(type: number) {
-    return ['bg-[#EAF2FF]', 'bg-[#D1FAE5]', 'bg-[#FEF3C7]', 'bg-[#F3E8FF]'][type] ?? 'bg-[#F3F4F6]';
-  }
+  actIcon(type: number) { return activityTypeIcon(type); }
+  actIconBg(type: number) { return activityTypeIconBg(type); }
 
   fmtDate(d: string) { return new Date(d).toLocaleDateString('ru', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); }
   fmtTime(d: string) { return new Date(d).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' }); }

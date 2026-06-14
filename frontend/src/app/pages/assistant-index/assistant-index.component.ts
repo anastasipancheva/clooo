@@ -106,6 +106,29 @@ interface ModuleStat {
         </div>
       }
 
+      <!-- Pending applications (#12) -->
+      @if (pendingActivities.length > 0) {
+        <div class="bg-white rounded-xl border border-[#FDE68A] overflow-hidden">
+          <div class="px-5 py-3 border-b border-[#FDE68A]">
+            <p class="text-sm font-semibold text-[#D97706]">⏳ Ожидает одобрения</p>
+          </div>
+          <div class="divide-y divide-[#FEF9F0]">
+            @for (a of pendingActivities; track a.id) {
+              <div class="px-5 py-3 flex items-center justify-between gap-3">
+                <div>
+                  <p class="text-sm text-[#1A1A1B]">{{ a.title }}</p>
+                  <p class="text-xs text-[#6B7280]">{{ a.courseCode }} · {{ a.typeLabel }} · {{ fmtDate(a.startsAt) }}</p>
+                </div>
+                <button (click)="cancel(a.id)"
+                  class="h-8 px-3 rounded-lg border border-[#E5E7EB] text-xs text-[#DC2626] font-medium hover:border-[#DC2626] transition-colors whitespace-nowrap">
+                  Отменить
+                </button>
+              </div>
+            }
+          </div>
+        </div>
+      }
+
       <!-- Rejected applications -->
       @if (rejectedActivities.length > 0) {
         <div class="bg-white rounded-xl border border-[#FEE2E2] overflow-hidden">
@@ -200,13 +223,20 @@ export class AssistantIndexComponent implements OnInit {
   get activeKts()      { return this.activities.filter(a => a.status === 'Active' && a.type === 2); }
   get totalSessions()  { return this.moduleStats.reduce((s, m) => s + m.count, 0); }
 
-  // Only show "apply" for activities where application is NOT approved/pending
+  // Only show "apply" for activities where application is NOT approved/pending,
+  // and that are not finished/in the past (#8).
   get availableToApply() {
+    const now = Date.now();
     return this.activities.filter(a => {
       const st = this.appStates[a.id];
-      if (!st) return false;
-      return st.status === 'none';
+      if (!st || st.status !== 'none') return false;
+      return a.status !== 'Finished' && new Date(a.endsAt).getTime() > now;
     });
+  }
+
+  // #12 — заявки, ожидающие одобрения (можно отменить).
+  get pendingActivities() {
+    return this.activities.filter(a => this.appStates[a.id]?.status === 'pending');
   }
 
   get rejectedActivities() {
@@ -288,6 +318,17 @@ export class AssistantIndexComponent implements OnInit {
       if (msg.includes('Already applied')) { state.done = true; state.status = 'pending'; this.toast.info('Заявка уже подана'); }
       else this.toast.error(msg);
     } finally { state.submitting = false; }
+  }
+
+  async cancel(activityId: string) {
+    const state = this.appStates[activityId];
+    if (!state) return;
+    try {
+      await this.api.cancelApplication(activityId);
+      this.toast.success('Заявка отменена');
+      state.status = 'none';
+      state.done = false;
+    } catch (e: unknown) { this.toast.error(e instanceof Error ? e.message : 'Ошибка'); }
   }
 
   fmtDate(d: string) { return new Date(d).toLocaleDateString('ru', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); }

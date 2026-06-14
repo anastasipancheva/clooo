@@ -58,9 +58,35 @@ import { Subscription } from 'rxjs';
         </div>
       }
 
+      <!-- Materials: links to theory test and task file (#15) -->
+      @if (theoryTestUrl || taskFileUrl) {
+        <div class="bg-white rounded-xl border border-[#E5E7EB] p-5 space-y-3">
+          <p class="text-sm font-semibold text-[#1A1A1B]">Материалы занятия</p>
+          <div class="flex flex-col gap-2">
+            @if (theoryTestUrl) {
+              <a [href]="theoryTestUrl" target="_blank" rel="noopener"
+                class="inline-flex items-center gap-2 text-sm text-[#005BFF] hover:underline">
+                📝 Тест по теории
+              </a>
+            }
+            @if (taskFileUrl) {
+              <a [href]="taskFileUrl" target="_blank" rel="noopener"
+                class="inline-flex items-center gap-2 text-sm text-[#005BFF] hover:underline">
+                📄 Файл с задачами
+              </a>
+            }
+          </div>
+        </div>
+      }
+
       <!-- Team actions: call assistant + mark task ready -->
       <div class="bg-white rounded-xl border border-[#E5E7EB] p-5 space-y-4">
-        <p class="text-sm font-semibold text-[#1A1A1B]">Команда</p>
+        <div class="flex items-center justify-between">
+          <p class="text-sm font-semibold text-[#1A1A1B]">Команда {{ teamName ? '«' + teamName + '»' : '' }}</p>
+          @if (assistantName) {
+            <span class="text-xs text-[#6B7280]">Ассистент: <span class="font-medium text-[#1A1A1B]">{{ assistantName }}</span></span>
+          }
+        </div>
 
         @if (!teamId && !teamLoading) {
           <p class="text-xs text-[#9CA3AF]">Вы ещё не в команде. Обратитесь к преподавателю.</p>
@@ -78,16 +104,22 @@ import { Subscription } from 'rxjs';
 
           <!-- Mark task ready with task number -->
           <div class="space-y-2">
-            <p class="text-xs font-medium text-[#6B7280]">Отметить задачу готовой</p>
-            <div class="flex gap-2 items-center">
-              <input type="number" min="1" max="10" [(ngModel)]="taskNumber"
-                placeholder="№ задачи (1–10)"
-                class="w-36 h-9 px-3 rounded-lg border border-[#E5E7EB] text-sm outline-none focus:border-[#005BFF]" />
-              <button (click)="markReadyByNumber()" [disabled]="!taskNumber || taskNumber < 1 || taskNumber > 10"
-                class="h-9 px-4 rounded-lg bg-[#059669] text-white text-xs font-semibold hover:bg-[#047857] disabled:opacity-50 transition-colors">
-                ✓ Готово
-              </button>
-            </div>
+            <p class="text-xs font-medium text-[#6B7280]">
+              Отметить задачу готовой@if (taskCount > 0) { <span> (всего задач: {{ taskCount }})</span> }
+            </p>
+            @if (taskCount > 0) {
+              <div class="flex gap-2 items-center">
+                <input type="number" min="1" [max]="taskCount" [(ngModel)]="taskNumber"
+                  [placeholder]="'№ задачи (1–' + taskCount + ')'"
+                  class="w-44 h-9 px-3 rounded-lg border border-[#E5E7EB] text-sm outline-none focus:border-[#005BFF]" />
+                <button (click)="markReadyByNumber()" [disabled]="!taskNumber || taskNumber < 1 || taskNumber > taskCount"
+                  class="h-9 px-4 rounded-lg bg-[#059669] text-white text-xs font-semibold hover:bg-[#047857] disabled:opacity-50 transition-colors">
+                  ✓ Готово
+                </button>
+              </div>
+            } @else {
+              <p class="text-xs text-[#9CA3AF]">Преподаватель ещё не указал количество задач.</p>
+            }
           </div>
         }
       </div>
@@ -131,8 +163,13 @@ export class LectureDetailComponent implements OnInit, OnDestroy {
 
   activityId = '';
   teamId: string | null = null;
+  teamName: string | null = null;
   teamLoading = true;
   taskNumber: number | null = null;
+  taskCount = 0;
+  theoryTestUrl: string | null = null;
+  taskFileUrl: string | null = null;
+  assistantName: string | null = null;
   tasks: { id: string; code: string; status: string }[] = [];
   miniTest: MiniTestDto | null = null;
   answers: Record<string, number> = {};
@@ -170,7 +207,12 @@ export class LectureDetailComponent implements OnInit, OnDestroy {
     try {
       const data = await this.api.getMyTeam(this.activityId);
       this.teamId = data.teamId;
+      this.teamName = data.teamName ?? null;
       this.tasks = data.tasks ?? [];
+      this.taskCount = data.taskCount ?? 0;
+      this.theoryTestUrl = data.theoryTestUrl ?? null;
+      this.taskFileUrl = data.taskFileUrl ?? null;
+      this.assistantName = data.assistantName ?? null;
     } catch { this.teamId = null; }
     finally { this.teamLoading = false; }
   }
@@ -214,12 +256,13 @@ export class LectureDetailComponent implements OnInit, OnDestroy {
 
   async markReadyByNumber() {
     if (!this.teamId || !this.taskNumber) return;
-    const task = this.tasks.find((_, i) => i + 1 === this.taskNumber)
-      ?? this.tasks.find(t => t.code.endsWith(String(this.taskNumber)));
-    if (!task) { this.toast.error(`Задача №${this.taskNumber} не найдена`); return; }
+    if (this.taskNumber < 1 || this.taskNumber > this.taskCount) {
+      this.toast.error(`Номер задачи должен быть от 1 до ${this.taskCount}`); return;
+    }
     try {
-      await this.api.markTeamTaskReady(this.teamId, task.id);
+      await this.api.markTeamTaskReadyByNumber(this.teamId, this.taskNumber);
       this.toast.success(`Задача №${this.taskNumber} отмечена готовой`);
+      this.loadTeam();
     } catch (e: unknown) { this.toast.error(e instanceof Error ? e.message : 'Ошибка'); }
   }
 

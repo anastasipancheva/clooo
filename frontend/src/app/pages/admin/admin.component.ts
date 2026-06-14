@@ -361,6 +361,14 @@ function defaultAcademicYear() {
                   <input type="url" [class]="INPUT + ' w-full'" placeholder="https://drive.google.com/..."
                     [(ngModel)]="matFileUrl" />
                 </div>
+                @if (matHwModuleIds.length === 0 && matActivity.typeLabel !== 'КТ') {
+                  <div>
+                    <label class="block text-xs text-[#6B7280] mb-1">🔢 Количество задач</label>
+                    <input type="number" min="0" [class]="INPUT + ' w-32'" placeholder="напр. 6"
+                      [(ngModel)]="matTaskCount" />
+                    <p class="text-[10px] text-[#9CA3AF] mt-1">Студенты отмечают задачу готовой по номеру (1…N).</p>
+                  </div>
+                }
                 <button (click)="saveMaterials()" [disabled]="matSaving" [class]="BTN_PRIMARY">
                   {{ matSaving ? 'Сохранение...' : 'Сохранить материалы' }}
                 </button>
@@ -659,16 +667,16 @@ function defaultAcademicYear() {
       @if (tab === 'teams' && selected) {
         <div class="space-y-5">
           <div class="bg-white rounded-xl border border-[#E5E7EB] p-5">
-            <p class="text-xs font-semibold text-[#6B7280] uppercase tracking-wide mb-3">Генерация команд (только для лекций)</p>
+            <p class="text-xs font-semibold text-[#6B7280] uppercase tracking-wide mb-3">Команды (лекции и ДЗ-сессии)</p>
             <div class="flex flex-wrap gap-3 items-end">
               <div>
                 <label class="block text-xs text-[#6B7280] mb-1">Занятие</label>
                 <select [class]="INPUT + ' pr-8 min-w-60'"
                   [(ngModel)]="teamsActivityId"
                   (ngModelChange)="onTeamsActivityChange($event)">
-                  <option value="">— выберите лекцию —</option>
-                  @for (a of lectureActivities; track a.id) {
-                    <option [value]="a.id">М{{ a.moduleNumber }} / {{ a.title }}</option>
+                  <option value="">— выберите занятие —</option>
+                  @for (a of teamActivities; track a.id) {
+                    <option [value]="a.id">М{{ a.moduleNumber }} / {{ a.typeLabel }} / {{ a.title }}</option>
                   }
                 </select>
               </div>
@@ -681,10 +689,20 @@ function defaultAcademicYear() {
               </button>
             </div>
             <p class="text-xs text-[#9CA3AF] mt-2">
-              Алгоритм: змейка по списку записанных студентов. Текущие команды заменяются.
+              Авто-генерация: змейка по списку записанных студентов (текущие команды заменяются).
+              Ниже можно создавать и редактировать команды вручную.
             </p>
-            @if (lectureActivities.length === 0 && !scheduleLoading) {
-              <p class="text-xs text-[#EF4444] mt-2">Нет лекций в расписании. Добавьте занятия типа «Лекция».</p>
+            @if (teamActivities.length === 0 && !scheduleLoading) {
+              <p class="text-xs text-[#EF4444] mt-2">Нет лекций/ДЗ-сессий в расписании.</p>
+            }
+            @if (teamsActivityId) {
+              <div class="flex flex-wrap gap-2 items-end mt-3 pt-3 border-t border-[#F3F4F6]">
+                <div>
+                  <label class="block text-xs text-[#6B7280] mb-1">Название новой команды</label>
+                  <input [class]="INPUT + ' w-44'" [(ngModel)]="newTeamName" placeholder="Команда N" />
+                </div>
+                <button (click)="createManualTeam()" [class]="BTN_GHOST">➕ Создать команду вручную</button>
+              </div>
             }
           </div>
 
@@ -694,25 +712,58 @@ function defaultAcademicYear() {
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               @for (t of teams; track t.id) {
                 <div class="bg-white rounded-xl border border-[#E5E7EB] p-4">
-                  <p class="text-sm font-semibold text-[#1A1A1B] mb-2">{{ t.name }}</p>
-                  <div class="space-y-1">
-                    @for (m of t.members; track m.userId) {
-                      <div class="flex items-center gap-2">
-                        <div class="w-5 h-5 rounded-full bg-[#EAF2FF] flex items-center justify-center flex-shrink-0">
-                          <span class="text-[9px] font-bold text-[#005BFF]">{{ m.displayName?.[0]?.toUpperCase() }}</span>
-                        </div>
-                        <span class="text-xs text-[#1A1A1B]">{{ m.displayName }}</span>
-                      </div>
+                  <div class="flex items-center justify-between mb-2">
+                    <p class="text-sm font-semibold text-[#1A1A1B]">{{ t.name }}</p>
+                    @if (editingTeamId !== t.id) {
+                      <button (click)="startEditMembers(t)"
+                        class="text-xs text-[#6B7280] hover:text-[#005BFF]">✏️ Состав</button>
                     }
-                    @if (t.members.length === 0) { <p class="text-xs text-[#9CA3AF]">нет участников</p> }
                   </div>
-                  @if (t.assistants.length > 0) {
-                    <div class="mt-2 pt-2 border-t border-[#F3F4F6]">
-                      @for (a of t.assistants; track a.assistantId) {
-                        <span class="text-xs text-[#D97706] bg-[#FEF3C7] px-2 py-0.5 rounded-full">{{ a.displayName }}</span>
+
+                  @if (editingTeamId === t.id) {
+                    <!-- Member editor -->
+                    <div class="space-y-1 max-h-48 overflow-y-auto border border-[#E5E7EB] rounded-lg p-2 mb-2">
+                      @if (teamStudents.length === 0) { <p class="text-xs text-[#9CA3AF]">Нет записанных студентов</p> }
+                      @for (s of teamStudents; track s.id) {
+                        <label class="flex items-center gap-2 text-xs cursor-pointer">
+                          <input type="checkbox" [checked]="editTeamMemberIds.includes(s.id)" (change)="toggleMember(s.id)" class="accent-[#005BFF]" />
+                          {{ s.displayName }}
+                        </label>
                       }
                     </div>
+                    <div class="flex gap-2">
+                      <button (click)="saveTeamMembers(t.id)" [class]="BTN_PRIMARY + ' h-7 text-xs px-3'">✓ Сохранить</button>
+                      <button (click)="editingTeamId = null" [class]="BTN_GHOST + ' h-7 text-xs px-2'">✕</button>
+                    </div>
+                  } @else {
+                    <div class="space-y-1">
+                      @for (m of t.members; track m.userId) {
+                        <div class="flex items-center gap-2">
+                          <div class="w-5 h-5 rounded-full bg-[#EAF2FF] flex items-center justify-center flex-shrink-0">
+                            <span class="text-[9px] font-bold text-[#005BFF]">{{ m.displayName?.[0]?.toUpperCase() }}</span>
+                          </div>
+                          <span class="text-xs text-[#1A1A1B]">{{ m.displayName }}</span>
+                        </div>
+                      }
+                      @if (t.members.length === 0) { <p class="text-xs text-[#9CA3AF]">нет участников</p> }
+                    </div>
                   }
+
+                  <!-- Assistant assignment (#10) -->
+                  <div class="mt-2 pt-2 border-t border-[#F3F4F6]">
+                    <label class="block text-[10px] text-[#9CA3AF] mb-1">Ассистент команды</label>
+                    <select [class]="INPUT + ' w-full h-8 text-xs'"
+                      [ngModel]="t.assistants[0]?.assistantId ?? ''"
+                      (ngModelChange)="assignAssistant(t.id, $event)">
+                      <option value="">— не назначен —</option>
+                      @for (a of teamAssistantOptions; track a.id) {
+                        <option [value]="a.id">{{ a.displayName }}</option>
+                      }
+                    </select>
+                    @if (teamAssistantOptions.length === 0) {
+                      <p class="text-[10px] text-[#9CA3AF] mt-1">Нет одобренных ассистентов на это занятие.</p>
+                    }
+                  </div>
                 </div>
               }
             </div>
@@ -766,9 +817,9 @@ function defaultAcademicYear() {
                     @for (a of m.activities; track a; let ai = $index) {
                       <div class="flex items-center gap-2 flex-wrap">
                         <select [class]="INPUT + ' w-28'" [(ngModel)]="a.type">
-                          <option value="0">Лекция</option>
+                          <option value="1">Лекция</option>
                           <option value="2">КТ</option>
-                          <option value="3">ДЗ</option>
+                          <option value="3">ДЗ-сессия</option>
                         </select>
                         <input [class]="INPUT + ' flex-1 min-w-32'" [(ngModel)]="a.title" placeholder="Название занятия" />
                         <button (click)="tplRemoveActivity(mi, ai)" class="text-[#EF4444] text-xs">✕</button>
@@ -858,6 +909,9 @@ function defaultAcademicYear() {
               }
             </div>
           }
+        </div>
+      }
+      <!-- ══ MODALS (вне вкладок, чтобы открывались на любой вкладке) ══ -->
 
           <!-- Invite link modal -->
           @if (inviteModal) {
@@ -948,8 +1002,6 @@ function defaultAcademicYear() {
               </div>
             </div>
           }
-        </div>
-      }
     </div>
   `
 })
@@ -977,7 +1029,7 @@ export class AdminComponent implements OnInit {
 
   // Materials tab
   matActivity: TeacherActivity | null = null;
-  matVideoUrl = ''; matTestUrl = ''; matFileUrl = '';
+  matVideoUrl = ''; matTestUrl = ''; matFileUrl = ''; matTaskCount = '';
   matSaving = false;
   matHwModuleIds: string[] = [];
   nonHwActivities: TeacherActivity[] = [];
@@ -1004,6 +1056,12 @@ export class AdminComponent implements OnInit {
   teams: ActivityTeam[] = [];
   teamsLoading = false;
   generating = false;
+  // Manual team management (#9/#10)
+  teamStudents: { id: string; displayName: string }[] = [];
+  teamAssistantOptions: { id: string; displayName: string }[] = [];
+  newTeamName = '';
+  editingTeamId: string | null = null;
+  editTeamMemberIds: string[] = [];
 
   // Templates tab
   templates: TemplateSummary[] = [];
@@ -1050,6 +1108,8 @@ export class AdminComponent implements OnInit {
   get courseStudentsOnly() { return this.courseStudents.filter(u => u.role === 'Student'); }
   get courseAssistants() { return this.courseStudents.filter(u => u.role === 'Assistant'); }
   get lectureActivities() { return this.scheduleActivities.filter(a => a.typeLabel === 'Лекция'); }
+  // Командные занятия: лекции и ДЗ-сессии
+  get teamActivities() { return this.scheduleActivities.filter(a => a.typeLabel === 'Лекция' || a.typeLabel === 'ДЗ-сессия'); }
 
   ngOnInit() { this.loadCourses(); }
 
@@ -1192,6 +1252,7 @@ export class AdminComponent implements OnInit {
     this.matVideoUrl = act.preLectureVideoUrl ?? '';
     this.matTestUrl = act.theoryTestUrl ?? '';
     this.matFileUrl = act.taskFileUrl ?? '';
+    this.matTaskCount = act.taskCount ? String(act.taskCount) : '';
     this.matHwModuleIds = [];
   }
 
@@ -1214,6 +1275,7 @@ export class AdminComponent implements OnInit {
           preLectureVideoUrl: this.matVideoUrl,
           theoryTestUrl: this.matTestUrl,
           taskFileUrl: this.matFileUrl,
+          taskCount: this.matTaskCount === '' ? undefined : Math.max(0, parseInt(this.matTaskCount) || 0),
         });
       }
       this.toast.success('Материалы сохранены');
@@ -1280,17 +1342,73 @@ export class AdminComponent implements OnInit {
     try {
       const r = await this.api.autoGenerate(this.teamsActivityId, sz);
       this.toast.success(`Создано ${r.teamCount} команд (${r.studentCount} студентов)`);
-      this.teams = [...r.teams];
+      // Перезагружаем через getTeams: ответ autoGenerate имеет другую форму members,
+      // поэтому показываем команды сразу в корректном виде, без перезагрузки страницы.
+      await this.onTeamsActivityChange(this.teamsActivityId);
     } catch (e: unknown) { this.toast.error(e instanceof Error ? e.message : 'Ошибка'); }
     finally { this.generating = false; }
   }
 
   async onTeamsActivityChange(actId: string) {
-    if (!actId) { this.teams = []; return; }
+    this.editingTeamId = null;
+    if (!actId) { this.teams = []; this.teamStudents = []; this.teamAssistantOptions = []; return; }
     this.teamsLoading = true;
-    try { this.teams = await this.api.getTeams(actId); }
+    try {
+      this.teams = await this.api.getTeams(actId);
+      // Подгружаем записанных студентов курса и одобренных ассистентов занятия
+      if (this.selected) {
+        this.api.courseStudents(this.selected)
+          .then(list => this.teamStudents = list.filter(s => s.role === 'Student').map(s => ({ id: s.id, displayName: s.displayName })))
+          .catch(() => this.teamStudents = []);
+      }
+      this.api.approvedAssistants(actId)
+        .then(apps => this.teamAssistantOptions = apps
+          .filter(a => a.status === 'Approved')
+          .map(a => ({ id: a.assistantId, displayName: a.assistantName })))
+        .catch(() => this.teamAssistantOptions = []);
+    }
     catch { this.teams = []; }
     finally { this.teamsLoading = false; }
+  }
+
+  // ── Manual team management (#9/#10) ───────────────────────────────────────
+  async createManualTeam() {
+    if (!this.teamsActivityId) { this.toast.error('Выберите занятие'); return; }
+    const name = this.newTeamName.trim() || `Команда ${this.teams.length + 1}`;
+    try {
+      await this.api.createTeam(this.teamsActivityId, name);
+      this.newTeamName = '';
+      await this.onTeamsActivityChange(this.teamsActivityId);
+      this.toast.success('Команда создана');
+    } catch (e: unknown) { this.toast.error(e instanceof Error ? e.message : 'Ошибка'); }
+  }
+
+  startEditMembers(t: ActivityTeam) {
+    this.editingTeamId = t.id;
+    this.editTeamMemberIds = t.members.map(m => m.userId);
+  }
+
+  toggleMember(userId: string) {
+    this.editTeamMemberIds = this.editTeamMemberIds.includes(userId)
+      ? this.editTeamMemberIds.filter(id => id !== userId)
+      : [...this.editTeamMemberIds, userId];
+  }
+
+  async saveTeamMembers(teamId: string) {
+    try {
+      await this.api.setTeamMembers(teamId, this.editTeamMemberIds);
+      this.editingTeamId = null;
+      await this.onTeamsActivityChange(this.teamsActivityId);
+      this.toast.success('Состав команды обновлён');
+    } catch (e: unknown) { this.toast.error(e instanceof Error ? e.message : 'Ошибка'); }
+  }
+
+  async assignAssistant(teamId: string, assistantId: string) {
+    try {
+      await this.api.setTeamAssistants(teamId, assistantId ? [assistantId] : []);
+      await this.onTeamsActivityChange(this.teamsActivityId);
+      this.toast.success(assistantId ? 'Ассистент назначен' : 'Ассистент снят');
+    } catch (e: unknown) { this.toast.error(e instanceof Error ? e.message : 'Ошибка'); }
   }
 
   // Tab change — load data
@@ -1313,7 +1431,7 @@ export class AdminComponent implements OnInit {
     this.tplModules.push({ title: '', startsAt: '', endsAt: '', activities: [] });
   }
   tplRemoveModule(i: number) { this.tplModules.splice(i, 1); }
-  tplAddActivity(mi: number) { this.tplModules[mi].activities.push({ type: '0', title: '', tasks: [] }); }
+  tplAddActivity(mi: number) { this.tplModules[mi].activities.push({ type: '1', title: '', tasks: [] }); }
   tplAddTask(mi: number, ai: number) { this.tplModules[mi].activities[ai].tasks.push({ code: '', title: '', points: '1' }); }
   tplRemoveTask(mi: number, ai: number, ti: number) { this.tplModules[mi].activities[ai].tasks.splice(ti, 1); }
   tplRemoveActivity(mi: number, ai: number) { this.tplModules[mi].activities.splice(ai, 1); }
@@ -1444,8 +1562,9 @@ export class AdminComponent implements OnInit {
     this.saveAsTplSaving = true;
     try {
       await this.api.saveAsTemplate(this.selected, { title: this.saveAsTplTitle, description: this.saveAsTplDesc || undefined });
-      this.toast.success('Шаблон сохранён! Он доступен на вкладке 📋 Шаблоны.');
+      this.toast.success('Шаблон сохранён! Открываю вкладку «Шаблоны».');
       this.saveAsTplModal = false;
+      this.setTab('templates');
     } catch (e: unknown) { this.toast.error(e instanceof Error ? e.message : 'Ошибка'); }
     finally { this.saveAsTplSaving = false; }
   }
@@ -1486,11 +1605,13 @@ export class AdminComponent implements OnInit {
   }
 
   actTypeClass(type: number) {
-    const map: Record<number, string> = { 0: 'bg-[#EAF2FF] text-[#005BFF]', 1: 'bg-[#D1FAE5] text-[#059669]', 2: 'bg-[#FEF3C7] text-[#D97706]', 3: 'bg-[#F3E8FF] text-[#7C3AED]' };
+    // ActivityType 1-индексный: 1=Лекция, 2=КТ, 3=ДЗ-сессия
+    const map: Record<number, string> = { 1: 'bg-[#EAF2FF] text-[#005BFF]', 2: 'bg-[#FEF3C7] text-[#D97706]', 3: 'bg-[#F3E8FF] text-[#7C3AED]' };
     return map[type] ?? 'bg-[#F3F4F6] text-[#6B7280]';
   }
   actTypeLabelNum(type: number) {
-    return ['Лекция', 'Практика', 'КТ', 'ДЗ'][type] ?? 'Занятие';
+    const map: Record<number, string> = { 1: 'Лекция', 2: 'КТ', 3: 'ДЗ-сессия' };
+    return map[type] ?? 'Занятие';
   }
   fmtDateShort(d: string) { return new Date(d).toLocaleDateString('ru', { day: 'numeric', month: 'short', year: 'numeric' }); }
 

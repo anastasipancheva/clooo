@@ -69,11 +69,17 @@ export class ApiService {
 
   // Teams (student)
   getMyTeam(activityId: string) {
-    return this.get<{ teamId: string; teamName: string; tasks: { id: string; code: string; status: string }[] }>(
-      `/api/activities/${activityId}/my-team`);
+    return this.get<{
+      teamId: string; teamName: string;
+      tasks: { id: string; code: string; status: string }[];
+      activityTitle?: string; activityStatus?: string;
+      theoryTestUrl?: string | null; taskFileUrl?: string | null;
+      taskCount?: number; assistantName?: string | null;
+    }>(`/api/activities/${activityId}/my-team`);
   }
   requestHelp(teamId: string, message?: string) { return this.post<{ id: string }>(`/api/teams/${teamId}/help-requests`, { message }); }
   markTeamTaskReady(teamId: string, taskItemId: string) { return this.post<void>(`/api/teams/${teamId}/tasks/${taskItemId}/ready`); }
+  markTeamTaskReadyByNumber(teamId: string, taskNumber: number) { return this.post<void>(`/api/teams/${teamId}/tasks/by-number/${taskNumber}/ready`); }
 
   // Assistant session
   openHelp(activityId: string) { return this.get<HelpRequest[]>(`/api/activities/${activityId}/help-requests`); }
@@ -123,6 +129,9 @@ export class ApiService {
   reviewApplication(activityId: string, appId: string, approved: boolean) {
     return this.put<void>(`/api/activities/${activityId}/assistant-applications/${appId}/review`, { approved });
   }
+  cancelApplication(activityId: string) {
+    return this.delete<void>(`/api/activities/${activityId}/assistant-applications/mine`);
+  }
 
   // Assistant stats
   mySessions() { return this.get<AssistantSession[]>('/api/assistant/my-sessions'); }
@@ -150,7 +159,7 @@ export class ApiService {
   patchActivity(activityId: string, body: { title?: string; startsAt?: string; endsAt?: string }) {
     return this.patch<void>(`/api/teaching/activities/${activityId}`, body);
   }
-  patchMaterials(activityId: string, body: { preLectureVideoUrl?: string; theoryTestUrl?: string; taskFileUrl?: string }) {
+  patchMaterials(activityId: string, body: { preLectureVideoUrl?: string; theoryTestUrl?: string; taskFileUrl?: string; taskCount?: number }) {
     return this.patch<void>(`/api/teaching/activities/${activityId}/materials`, body);
   }
   startActivity(activityId: string) {
@@ -178,4 +187,11 @@ export class ApiService {
       `/api/teaching/activities/${activityId}/teams/auto-generate`, { teamSize });
   }
   getTeams(activityId: string) { return this.get<ActivityTeam[]>(`/api/teaching/activities/${activityId}/teams`); }
+  createTeam(activityId: string, name: string) { return this.post<string>(`/api/teaching/activities/${activityId}/teams`, { name }); }
+  setTeamMembers(teamId: string, ids: string[]) { return this.put<void>(`/api/teaching/teams/${teamId}/members`, { ids }); }
+  setTeamAssistants(teamId: string, ids: string[]) { return this.put<void>(`/api/teaching/teams/${teamId}/assistant-links`, { ids }); }
+  // Approved assistants for an activity (for assigning to teams)
+  approvedAssistants(activityId: string) {
+    return this.get<AssistantApplicationDto[]>(`/api/activities/${activityId}/assistant-applications`);
+  }
 }
