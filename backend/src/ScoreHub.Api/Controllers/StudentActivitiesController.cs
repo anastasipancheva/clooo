@@ -51,6 +51,40 @@ public sealed class StudentActivitiesController : ApiControllerBase
         return Ok(activities.OrderBy(a => a.StartsAt));
     }
 
+    /// <summary>Все занятия записанных курсов (включая завершённые) — для календаря студента.</summary>
+    [HttpGet("calendar")]
+    public async Task<IActionResult> Calendar(CancellationToken ct)
+    {
+        var uid = CurrentUserId;
+        if (uid is null) return Unauthorized();
+
+        var courseIds = await _db.CourseEnrollments
+            .Where(e => e.UserId == uid.Value)
+            .Select(e => e.CourseId)
+            .ToListAsync(ct);
+
+        var activities = await _db.Activities
+            .AsNoTracking()
+            .Where(a => courseIds.Contains(a.Module.CourseId))
+            .Select(a => new {
+                a.Id,
+                a.Title,
+                a.Type,
+                typeLabel = a.Type == ActivityType.Lecture ? "Лекция"
+                    : a.Type == ActivityType.ControlPoint ? "КТ"
+                    : "ДЗ-сессия",
+                status = a.Status.ToString(),
+                a.StartsAt,
+                a.EndsAt,
+                courseCode = a.Module.Course.Code,
+                courseTitle = a.Module.Course.Title,
+                moduleTitle = a.Module.Title
+            })
+            .ToListAsync(ct);
+
+        return Ok(activities.OrderBy(a => a.StartsAt));
+    }
+
     /// <summary>Моя команда и задачи на занятии.</summary>
     [HttpGet("/api/activities/{activityId:guid}/my-team")]
     public async Task<IActionResult> MyTeam(Guid activityId, CancellationToken ct)

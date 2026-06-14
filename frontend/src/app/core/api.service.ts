@@ -56,6 +56,7 @@ export class ApiService {
 
   // Student
   myActivities() { return this.get<StudentActivity[]>('/api/student/activities'); }
+  calendar() { return this.get<StudentActivity[]>('/api/student/calendar'); }
 
   // Notifications
   listNotifications() { return this.get<Notification[]>('/api/notifications'); }

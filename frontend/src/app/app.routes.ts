@@ -39,6 +39,10 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/scores/scores.component').then(m => m.ScoresComponent),
       },
       {
+        path: 'calendar',
+        loadComponent: () => import('./pages/calendar/calendar.component').then(m => m.CalendarComponent),
+      },
+      {
         path: 'notifications',
         loadComponent: () => import('./pages/notifications/notifications.component').then(m => m.NotificationsComponent),
       },

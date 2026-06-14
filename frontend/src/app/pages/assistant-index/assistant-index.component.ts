@@ -202,9 +202,16 @@ interface ModuleStat {
 
       <!-- Hint -->
       <div class="bg-[#F5F3FF] rounded-xl border border-[#DDD6FE] px-5 py-4">
-        <p class="text-xs text-[#7C3AED] leading-relaxed">
-          💡 После одобрения заявки преподавателем сессия появится в блоке «Идёт сейчас». Вы также получите уведомление.
-        </p>
+        @if (isTeacher) {
+          <p class="text-xs text-[#7C3AED] leading-relaxed">
+            💡 Вы преподаватель — у вас есть права ассистента на всех занятиях без подачи заявки.
+            Активные занятия появляются в блоке «Идёт сейчас», нажмите «Войти», чтобы вести приём.
+          </p>
+        } @else {
+          <p class="text-xs text-[#7C3AED] leading-relaxed">
+            💡 После одобрения заявки преподавателем сессия появится в блоке «Идёт сейчас». Вы также получите уведомление.
+          </p>
+        }
       </div>
     </div>
   `
@@ -219,6 +226,7 @@ export class AssistantIndexComponent implements OnInit {
   moduleStats: ModuleStat[] = [];
   loading = true;
 
+  get isTeacher() { return this.auth.isTeacher(); }
   get activeLectures() { return this.activities.filter(a => a.status === 'Active' && a.type !== 2); }
   get activeKts()      { return this.activities.filter(a => a.status === 'Active' && a.type === 2); }
   get totalSessions()  { return this.moduleStats.reduce((s, m) => s + m.count, 0); }
@@ -251,11 +259,26 @@ export class AssistantIndexComponent implements OnInit {
     this.loading = true;
     try {
       const [acts, sessions] = await Promise.all([
-        this.api.myActivities(),
+        this.api.myActivities().catch(() => [] as StudentActivity[]),
         this.api.mySessions()
       ]);
 
-      this.activities = acts;
+      // #13 — преподаватель является ассистентом на всех занятиях автоматически;
+      // у него нет «записи на курс», поэтому список занятий берём из mySessions.
+      this.activities = this.isTeacher
+        ? sessions.map(s => ({
+            id: s.activityId,
+            title: s.activityTitle,
+            type: s.activityType === 'ControlPoint' ? 2 : s.activityType === 'HomeworkSession' ? 3 : 1,
+            typeLabel: s.activityType === 'ControlPoint' ? 'КТ' : s.activityType === 'HomeworkSession' ? 'ДЗ-сессия' : 'Лекция',
+            status: s.activityStatus ?? 'Scheduled',
+            startsAt: s.activityStartsAt,
+            endsAt: s.activityStartsAt,
+            courseCode: s.courseCode,
+            courseTitle: s.courseTitle,
+            moduleTitle: s.moduleTitle,
+          } as StudentActivity))
+        : acts;
 
       // Build module stats with session details
       const map = new Map<string, ModuleStat>();
