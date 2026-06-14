@@ -174,7 +174,9 @@ public sealed class GroupActivityService : IGroupActivityService
                 TeamId = teamId,
                 CreatedAt = DateTimeOffset.UtcNow,
                 Status = SubmissionStatus.ReadyForReview,
-                ReadyAt = DateTimeOffset.UtcNow
+                ReadyAt = DateTimeOffset.UtcNow,
+                // Тот, кто отметил задачу готовой, и будет её защищать.
+                DefenderUserId = actorId
             };
             _db.TaskSubmissions.Add(sub);
         }
@@ -186,7 +188,7 @@ public sealed class GroupActivityService : IGroupActivityService
             sub.Status = SubmissionStatus.ReadyForReview;
             sub.ReadyAt = DateTimeOffset.UtcNow;
             sub.ReviewerId = null;
-            sub.DefenderUserId = null;
+            sub.DefenderUserId = actorId;
             sub.ReviewedAt = null;
             sub.Result01 = null;
             sub.DefenderCoefficient = null;
@@ -299,7 +301,9 @@ public sealed class GroupActivityService : IGroupActivityService
                 MapStatus(s.Status),
                 s.ReadyAt,
                 s.ReviewerId,
-                s.DefenderUserId))
+                s.DefenderUserId,
+                s.DefenderUserId == null ? null
+                    : _db.Users.Where(u => u.Id == s.DefenderUserId).Select(u => u.DisplayName).FirstOrDefault()))
             .ToListAsync(ct))
             .OrderBy(r => r.ReadyAt)
             .ToList();
@@ -372,8 +376,9 @@ public sealed class GroupActivityService : IGroupActivityService
         if (result01 is not (0 or 1))
             return OpResult<Unit>.Fail("result01 должен быть 0 или 1.");
 
-        if (defenderCoefficient is < 0.8m or > 1.2m)
-            return OpResult<Unit>.Fail("Коэффициент защитника должен быть от 0.8 до 1.2.");
+        // Коэффициент защитника: от 1.0 до 1.2 (начисляется только тому, кто сдавал).
+        if (defenderCoefficient is < 1.0m or > 1.2m)
+            return OpResult<Unit>.Fail("Коэффициент защитника должен быть от 1.0 до 1.2.");
 
         var sub = await _db.TaskSubmissions
             .Include(s => s.Team!)
@@ -384,20 +389,23 @@ public sealed class GroupActivityService : IGroupActivityService
         if (sub?.TeamId is null)
             return OpResult<Unit>.Fail("Это не командная сдача.");
 
-        if (sub.Status != SubmissionStatus.InReview)
-            return OpResult<Unit>.Fail("Сдача не на проверке.");
+        // Принимаем/отклоняем напрямую из «Ожидает» (или «На приёме»).
+        if (sub.Status is not (SubmissionStatus.ReadyForReview or SubmissionStatus.InReview))
+            return OpResult<Unit>.Fail("Сдача не ожидает приёма.");
 
-        var isReviewer = sub.ReviewerId == actorId;
         var isElevated = actor.Role is UserRole.Teacher or UserRole.Admin;
-        if (!isReviewer && !isElevated)
-            return OpResult<Unit>.Fail("Только принявший может завершить проверку.");
+        var isAssigned = await _db.TeamAssistants.AnyAsync(x => x.TeamId == sub.TeamId && x.AssistantId == actorId, ct);
+        if (!isElevated && !isAssigned && sub.ReviewerId != actorId)
+            return OpResult<Unit>.Fail("Вы не закреплены за этой командой.");
 
         if (!IsLive(sub.Activity) && !isElevated)
             return OpResult<Unit>.Fail("Занятие не запущено преподавателем.");
 
         sub.Status = accepted ? SubmissionStatus.Accepted : SubmissionStatus.Rejected;
         sub.Result01 = accepted ? 1 : 0;
-        sub.DefenderCoefficient = defenderCoefficient;
+        sub.ReviewerId = actorId;
+        // Коэффициент сохраняем только при принятии задачи.
+        sub.DefenderCoefficient = accepted ? defenderCoefficient : null;
         sub.ReviewedAt = DateTimeOffset.UtcNow;
 
         await _db.SaveChangesAsync(ct);
@@ -410,6 +418,54 @@ public sealed class GroupActivityService : IGroupActivityService
             null,
             ct);
 
+        return OpResult<Unit>.Ok(Unit.Value);
+    }
+
+    public async Task<OpResult<IReadOnlyList<TeamAttendanceRow>>> ListAttendance(Guid actorId, Guid activityId, CancellationToken ct = default)
+    {
+        var actor = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == actorId, ct);
+        if (actor is null || !CanAssist(actor.Role))
+            return OpResult<IReadOnlyList<TeamAttendanceRow>>.Fail("Недостаточно прав.");
+
+        var teamsQuery = _db.Teams.AsNoTracking().Where(t => t.ActivityId == activityId);
+        if (actor.Role is not (UserRole.Teacher or UserRole.Admin))
+            teamsQuery = teamsQuery.Where(t => _db.TeamAssistants.Any(a => a.TeamId == t.Id && a.AssistantId == actorId));
+
+        var rows = await teamsQuery
+            .Select(t => new TeamAttendanceRow(
+                t.Id,
+                t.Name,
+                t.Members.Select(m => new TeamAttendanceMember(
+                    m.UserId,
+                    _db.Users.Where(u => u.Id == m.UserId).Select(u => u.DisplayName).FirstOrDefault() ?? "?",
+                    m.IsAbsent)).ToList()))
+            .ToListAsync(ct);
+
+        return OpResult<IReadOnlyList<TeamAttendanceRow>>.Ok(rows);
+    }
+
+    public async Task<OpResult<Unit>> SetAttendance(Guid actorId, Guid teamId, Guid memberUserId, bool isAbsent, CancellationToken ct = default)
+    {
+        var actor = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == actorId, ct);
+        if (actor is null || !CanAssist(actor.Role))
+            return OpResult<Unit>.Fail("Недостаточно прав.");
+
+        var team = await _db.Teams.Include(t => t.Activity).FirstOrDefaultAsync(t => t.Id == teamId, ct);
+        if (team is null) return OpResult<Unit>.Fail("Команда не найдена.");
+
+        if (team.Activity.Status == ActivityStatus.Finished)
+            return OpResult<Unit>.Fail("Занятие завершено — отметки изменить нельзя.");
+
+        var isElevated = actor.Role is UserRole.Teacher or UserRole.Admin;
+        var isAssigned = await _db.TeamAssistants.AnyAsync(x => x.TeamId == teamId && x.AssistantId == actorId, ct);
+        if (!isElevated && !isAssigned)
+            return OpResult<Unit>.Fail("Вы не закреплены за этой командой.");
+
+        var member = await _db.TeamMembers.FirstOrDefaultAsync(m => m.TeamId == teamId && m.UserId == memberUserId, ct);
+        if (member is null) return OpResult<Unit>.Fail("Участник не найден в команде.");
+
+        member.IsAbsent = isAbsent;
+        await _db.SaveChangesAsync(ct);
         return OpResult<Unit>.Ok(Unit.Value);
     }
 }

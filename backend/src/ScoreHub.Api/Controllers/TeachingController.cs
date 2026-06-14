@@ -252,6 +252,28 @@ public sealed class TeachingController : ApiControllerBase
         }
 
         activity.Status = ActivityStatus.Active;
+
+        // B5 — команды без ассистента получают преподавателя, который начал занятие.
+        var teacherId = CurrentUserId;
+        if (teacherId is not null && activity.Type is ActivityType.Lecture or ActivityType.HomeworkSession)
+        {
+            var teamsNoAssistant = await _db.Teams
+                .Include(t => t.Assistants)
+                .Where(t => t.ActivityId == activityId && !t.Assistants.Any())
+                .ToListAsync(ct);
+
+            if (teamsNoAssistant.Count > 0)
+            {
+                var teacherAssigned = await _db.ActivityAssistants
+                    .AnyAsync(aa => aa.ActivityId == activityId && aa.AssistantId == teacherId.Value, ct);
+                if (!teacherAssigned)
+                    _db.ActivityAssistants.Add(new ActivityAssistant { ActivityId = activityId, AssistantId = teacherId.Value });
+
+                foreach (var team in teamsNoAssistant)
+                    team.Assistants.Add(new TeamAssistant { AssistantId = teacherId.Value });
+            }
+        }
+
         await _db.SaveChangesAsync(ct);
 
         // Уведомления — некритичны, не блокируем ответ при ошибке SignalR/DB
@@ -544,6 +566,9 @@ public sealed class TeachingController : ApiControllerBase
             .Include(a => a.Module)
             .FirstOrDefaultAsync(a => a.Id == activityId, ct);
         if (activity is null) return NotFound();
+
+        if (activity.EndsAt < DateTimeOffset.UtcNow)
+            return BadRequest(new { error = "Нельзя формировать команды для прошедшего занятия." });
 
         var courseId = activity.Module.CourseId;
         var enrolledIds = await _db.CourseEnrollments

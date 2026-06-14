@@ -4,9 +4,6 @@ namespace ScoreHub.Application.Abstractions;
 
 public interface IScoringService
 {
-    /// <summary>Set group coefficient for a team after a lecture. Recalculates TeamGroupScore.</summary>
-    Task<OpResult<Unit>> SetGroupScore(Guid actorId, Guid activityId, Guid teamId, decimal groupCoefficient, CancellationToken ct = default);
-
     /// <summary>Finalize KT: compute multiplier per student, recalculate ModuleScore.</summary>
     Task<OpResult<Unit>> FinalizeKt(Guid actorId, Guid activityId, CancellationToken ct = default);
 

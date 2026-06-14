@@ -17,60 +17,6 @@ public sealed class ScoringService : IScoringService
     private static bool CanManage(UserRole r) => r is UserRole.Teacher or UserRole.Admin;
     private static bool CanAssist(UserRole r) => r is UserRole.Assistant or UserRole.Teacher or UserRole.Admin;
 
-    public async Task<OpResult<Unit>> SetGroupScore(
-        Guid actorId, Guid activityId, Guid teamId, decimal groupCoefficient, CancellationToken ct = default)
-    {
-        var actor = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == actorId, ct);
-        if (actor is null || !CanAssist(actor.Role))
-            return OpResult<Unit>.Fail("Недостаточно прав.");
-
-        if (groupCoefficient is < 0.8m or > 1.2m)
-            return OpResult<Unit>.Fail("Коэффициент должен быть от 0.8 до 1.2.");
-
-        var activity = await _db.Activities.AsNoTracking().FirstOrDefaultAsync(a => a.Id == activityId, ct);
-        if (activity is null || activity.Type != ActivityType.Lecture)
-            return OpResult<Unit>.Fail("Это не лекция.");
-
-        var team = await _db.Teams.Include(t => t.Members).FirstOrDefaultAsync(t => t.Id == teamId, ct);
-        if (team is null || team.ActivityId != activityId)
-            return OpResult<Unit>.Fail("Команда не найдена.");
-
-        // Count accepted tasks
-        var tasks = await _db.TaskItems
-            .Where(ti => ti.TaskSet.ActivityId == activityId)
-            .CountAsync(ct);
-
-        var accepted = await _db.TaskSubmissions
-            .CountAsync(s => s.ActivityId == activityId && s.TeamId == teamId && s.Status == SubmissionStatus.Accepted, ct);
-
-        decimal basePoints = tasks > 0
-            ? Math.Round((decimal)accepted / tasks * activity.LectureBasePoints, 4)
-            : 0;
-
-        var score = await _db.TeamGroupScores
-            .FirstOrDefaultAsync(s => s.TeamId == teamId && s.ActivityId == activityId, ct);
-
-        if (score is null)
-        {
-            score = new TeamGroupScore
-            {
-                Id = Guid.NewGuid(),
-                TeamId = teamId,
-                ActivityId = activityId
-            };
-            _db.TeamGroupScores.Add(score);
-        }
-
-        score.TasksAccepted = accepted;
-        score.TasksTotal = tasks;
-        score.BasePoints = basePoints;
-        score.GroupCoefficient = groupCoefficient;
-        score.UpdatedAt = DateTimeOffset.UtcNow;
-
-        await _db.SaveChangesAsync(ct);
-        return OpResult<Unit>.Ok(Unit.Value);
-    }
-
     public async Task<OpResult<Unit>> FinalizeKt(Guid actorId, Guid activityId, CancellationToken ct = default)
     {
         var actor = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == actorId, ct);
@@ -160,25 +106,25 @@ public sealed class ScoringService : IScoringService
         foreach (var actId in lectureIds)
         {
             // Find team the student was in for this lecture
-            var teamId = await _db.TeamMembers
-                .Where(m => m.Team.ActivityId == actId && m.UserId == studentId)
-                .Select(m => (Guid?)m.TeamId)
-                .FirstOrDefaultAsync(ct);
-
-            if (teamId is null) continue;
-
-            var groupScore = await _db.TeamGroupScores
-                .AsNoTracking()
-                .FirstOrDefaultAsync(s => s.TeamId == teamId && s.ActivityId == actId, ct);
-
-            if (groupScore is null) continue;
-
-            // Absent students get 0.8 instead of GroupCoefficient
             var member = await _db.TeamMembers
-                .FirstOrDefaultAsync(m => m.TeamId == teamId && m.UserId == studentId, ct);
+                .FirstOrDefaultAsync(m => m.Team.ActivityId == actId && m.UserId == studentId, ct);
 
-            decimal coeff = (member?.IsAbsent == true) ? 0.8m : groupScore.GroupCoefficient;
-            decimal lectureScore = groupScore.BasePoints * coeff;
+            if (member is null) continue;
+
+            // Отсутствующим на паре баллы за лекцию не начисляются.
+            if (member.IsAbsent) continue;
+
+            // За каждую принятую задачу команды: защитник получает свой коэффициент (1.0–1.2),
+            // остальные присутствующие — ровно по 1 баллу.
+            var acceptedSubs = await _db.TaskSubmissions
+                .AsNoTracking()
+                .Where(s => s.ActivityId == actId && s.TeamId == member.TeamId && s.Status == SubmissionStatus.Accepted)
+                .Select(s => new { s.DefenderUserId, s.DefenderCoefficient })
+                .ToListAsync(ct);
+
+            decimal lectureScore = 0;
+            foreach (var s in acceptedSubs)
+                lectureScore += (s.DefenderUserId == studentId) ? (s.DefenderCoefficient ?? 1.0m) : 1.0m;
 
             // Add mini-test bonus
             var bonus = await _db.MiniTestAnswers

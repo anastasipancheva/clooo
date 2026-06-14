@@ -17,7 +17,15 @@ public interface IGroupActivityService
     Task<OpResult<IReadOnlyList<TeamSubmissionRow>>> ListPendingTeamSubmissions(Guid actorId, Guid activityId, CancellationToken ct = default);
     Task<OpResult<Unit>> StartTeamReview(Guid actorId, Guid submissionId, Guid defenderUserId, CancellationToken ct = default);
     Task<OpResult<Unit>> CompleteTeamReview(Guid actorId, Guid submissionId, bool accepted, int result01, decimal? defenderCoefficient, CancellationToken ct = default);
+
+    /// <summary>Состав команд занятия с отметкой присутствия (для ассистента/преподавателя).</summary>
+    Task<OpResult<IReadOnlyList<TeamAttendanceRow>>> ListAttendance(Guid actorId, Guid activityId, CancellationToken ct = default);
+    /// <summary>Отметить присутствие/отсутствие участника команды. Нельзя после завершения занятия.</summary>
+    Task<OpResult<Unit>> SetAttendance(Guid actorId, Guid teamId, Guid memberUserId, bool isAbsent, CancellationToken ct = default);
 }
+
+public sealed record TeamAttendanceMember(Guid UserId, string DisplayName, bool IsAbsent);
+public sealed record TeamAttendanceRow(Guid TeamId, string TeamName, IReadOnlyList<TeamAttendanceMember> Members);
 
 public sealed record HelpRequestRow(Guid Id, Guid TeamId, string TeamName, Guid CreatedByUserId, DateTimeOffset CreatedAt, string? Message);
 
@@ -30,7 +38,8 @@ public sealed record TeamSubmissionRow(
     SubmissionStatusDto Status,
     DateTimeOffset? ReadyAt,
     Guid? ReviewerId,
-    Guid? DefenderUserId);
+    Guid? DefenderUserId,
+    string? DefenderName);
 
 public enum SubmissionStatusDto
 {

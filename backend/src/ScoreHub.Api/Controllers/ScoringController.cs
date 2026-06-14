@@ -14,17 +14,6 @@ public sealed class ScoringController : ApiControllerBase
     private readonly IScoringService _svc;
     public ScoringController(IScoringService svc) => _svc = svc;
 
-    /// <summary>Выставить групповой коэффициент команде за лекцию (0.8–1.2). Пересчитывает TeamGroupScore.</summary>
-    [HttpPost("activities/{activityId:guid}/teams/{teamId:guid}/group-score")]
-    [Authorize(Roles = $"{AppRoles.Assistant},{AppRoles.Teacher},{AppRoles.Admin}")]
-    public async Task<IActionResult> SetGroupScore(Guid activityId, Guid teamId, [FromBody] GroupScoreDto dto, CancellationToken ct)
-    {
-        var uid = CurrentUserId;
-        if (uid is null) return Unauthorized();
-        var r = await _svc.SetGroupScore(uid.Value, activityId, teamId, dto.GroupCoefficient, ct);
-        return r.IsOk ? Ok() : BadRequest(new { error = r.Error });
-    }
-
     /// <summary>Финализировать КТ: применить мультипликатор и пересчитать ModuleScore всем студентам.</summary>
     [HttpPost("activities/{activityId:guid}/kt/finalize")]
     [Authorize(Roles = $"{AppRoles.Teacher},{AppRoles.Admin}")]
@@ -56,6 +45,4 @@ public sealed class ScoringController : ApiControllerBase
         var r = await _svc.GetCourseScores(uid.Value, courseId, ct);
         return r.IsOk ? Ok(r.Value) : BadRequest(new { error = r.Error });
     }
-
-    public sealed record GroupScoreDto(decimal GroupCoefficient);
 }

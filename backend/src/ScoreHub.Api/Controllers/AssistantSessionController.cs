@@ -75,6 +75,27 @@ public sealed class AssistantSessionController : ApiControllerBase
         return r.IsOk ? Ok() : BadRequest(new { error = r.Error });
     }
 
+    /// <summary>Состав команд занятия с отметкой присутствия.</summary>
+    [HttpGet("activities/{activityId:guid}/attendance")]
+    public async Task<IActionResult> Attendance(Guid activityId, CancellationToken ct)
+    {
+        var uid = CurrentUserId;
+        if (uid is null) return Unauthorized();
+        var r = await _group.ListAttendance(uid.Value, activityId, ct);
+        return r.IsOk ? Ok(r.Value) : BadRequest(new { error = r.Error });
+    }
+
+    /// <summary>Отметить присутствие/отсутствие участника команды (нельзя после завершения занятия).</summary>
+    [HttpPost("teams/{teamId:guid}/members/{memberUserId:guid}/attendance")]
+    public async Task<IActionResult> SetAttendance(Guid teamId, Guid memberUserId, [FromBody] AttendanceDto dto, CancellationToken ct)
+    {
+        var uid = CurrentUserId;
+        if (uid is null) return Unauthorized();
+        var r = await _group.SetAttendance(uid.Value, teamId, memberUserId, dto.IsAbsent, ct);
+        return r.IsOk ? Ok() : BadRequest(new { error = r.Error });
+    }
+
     public sealed record StartReviewDto(Guid DefenderUserId);
     public sealed record CompleteReviewDto(bool Accepted, int Result01, decimal? DefenderCoefficient);
+    public sealed record AttendanceDto(bool IsAbsent);
 }

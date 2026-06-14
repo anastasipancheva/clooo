@@ -193,8 +193,11 @@ public sealed class TeachingSetupService : ITeachingSetupService
         if (actor is null || !CanTeach(actor.Role))
             return OpResult<Guid>.Fail("Недостаточно прав.");
 
-        if (!await _db.Activities.AnyAsync(x => x.Id == activityId, ct))
+        var activity = await _db.Activities.FirstOrDefaultAsync(x => x.Id == activityId, ct);
+        if (activity is null)
             return OpResult<Guid>.Fail("Занятие не найдено.");
+        if (activity.EndsAt < DateTimeOffset.UtcNow)
+            return OpResult<Guid>.Fail("Нельзя создавать команды для прошедшего занятия.");
 
         var team = new Team { Id = Guid.NewGuid(), ActivityId = activityId, Name = name.Trim() };
         _db.Teams.Add(team);
@@ -208,20 +211,31 @@ public sealed class TeachingSetupService : ITeachingSetupService
         if (actor is null || !CanTeach(actor.Role))
             return OpResult<Unit>.Fail("Недостаточно прав.");
 
-        var team = await _db.Teams.FirstOrDefaultAsync(t => t.Id == teamId, ct);
+        var team = await _db.Teams.Include(t => t.Activity).FirstOrDefaultAsync(t => t.Id == teamId, ct);
         if (team is null)
             return OpResult<Unit>.Fail("Команда не найдена.");
+        if (team.Activity.EndsAt < DateTimeOffset.UtcNow)
+            return OpResult<Unit>.Fail("Нельзя менять состав команд для прошедшего занятия.");
 
-        foreach (var uid in memberUserIds.Distinct())
+        var ids = memberUserIds.Distinct().ToList();
+        foreach (var uid in ids)
         {
             if (!await _db.Users.AnyAsync(u => u.Id == uid, ct))
                 return OpResult<Unit>.Fail($"Пользователь {uid} не найден.");
         }
 
+        // Текущий состав этой команды убираем
         var existing = await _db.TeamMembers.Where(x => x.TeamId == teamId).ToListAsync(ct);
         _db.TeamMembers.RemoveRange(existing);
 
-        foreach (var uid in memberUserIds.Distinct())
+        // B2 — один студент не может быть в нескольких командах одного занятия:
+        // убираем выбранных студентов из других команд этого же занятия.
+        var otherMemberships = await _db.TeamMembers
+            .Where(m => m.Team.ActivityId == team.ActivityId && m.TeamId != teamId && ids.Contains(m.UserId))
+            .ToListAsync(ct);
+        _db.TeamMembers.RemoveRange(otherMemberships);
+
+        foreach (var uid in ids)
         {
             _db.TeamMembers.Add(new TeamMember
             {
