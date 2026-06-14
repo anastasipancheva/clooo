@@ -7,6 +7,10 @@ public interface IGroupActivityService
     Task<OpResult<Guid>> RequestAssistantHelp(Guid actorId, Guid teamId, string? message, CancellationToken ct = default);
     Task<OpResult<Unit>> MarkTeamTaskReady(Guid actorId, Guid teamId, Guid taskItemId, CancellationToken ct = default);
 
+    /// <summary>Отметить готовность сдать задачу по её номеру (1..TaskCount занятия).
+    /// Условия задач лежат во внешнем файле, поэтому идентификация по номеру.</summary>
+    Task<OpResult<Unit>> MarkTeamTaskReadyByNumber(Guid actorId, Guid teamId, int taskNumber, CancellationToken ct = default);
+
     Task<OpResult<IReadOnlyList<HelpRequestRow>>> ListOpenHelpRequests(Guid actorId, Guid activityId, CancellationToken ct = default);
     Task<OpResult<Unit>> ResolveHelpRequest(Guid actorId, Guid helpRequestId, CancellationToken ct = default);
 

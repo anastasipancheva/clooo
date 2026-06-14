@@ -76,6 +76,64 @@ public sealed class GroupActivityService : IGroupActivityService
         return OpResult<Guid>.Ok(hr.Id);
     }
 
+    public async Task<OpResult<Unit>> MarkTeamTaskReadyByNumber(Guid actorId, Guid teamId, int taskNumber, CancellationToken ct = default)
+    {
+        var team = await _db.Teams
+            .Include(t => t.Activity)
+            .FirstOrDefaultAsync(t => t.Id == teamId, ct);
+        if (team is null)
+            return OpResult<Unit>.Fail("Команда не найдена.");
+
+        var activity = team.Activity;
+        if (activity.TaskCount <= 0)
+            return OpResult<Unit>.Fail("Для занятия не задано количество задач.");
+        if (taskNumber < 1 || taskNumber > activity.TaskCount)
+            return OpResult<Unit>.Fail($"Номер задачи должен быть от 1 до {activity.TaskCount}.");
+
+        // Гарантируем, что для занятия есть служебный набор задач с элементом нужного номера
+        // (условия — во внешнем файле, нам нужен лишь Code = номер, чтобы связать сдачу/приём).
+        var taskItem = await EnsureNumberedTaskItemAsync(activity.Id, taskNumber, ct);
+
+        return await MarkTeamTaskReady(actorId, teamId, taskItem.Id, ct);
+    }
+
+    /// <summary>Находит/создаёт TaskItem с Code = номер в служебном наборе занятия.</summary>
+    private async Task<TaskItem> EnsureNumberedTaskItemAsync(Guid activityId, int number, CancellationToken ct)
+    {
+        var code = number.ToString();
+
+        var existing = await _db.TaskItems
+            .FirstOrDefaultAsync(t => t.TaskSet.ActivityId == activityId && t.Code == code, ct);
+        if (existing is not null) return existing;
+
+        var taskSet = await _db.TaskSets
+            .FirstOrDefaultAsync(ts => ts.ActivityId == activityId && ts.Title == "Задачи", ct);
+        if (taskSet is null)
+        {
+            taskSet = new TaskSet
+            {
+                Id = Guid.NewGuid(),
+                ActivityId = activityId,
+                Title = "Задачи",
+                Published = true
+            };
+            _db.TaskSets.Add(taskSet);
+        }
+
+        var item = new TaskItem
+        {
+            Id = Guid.NewGuid(),
+            TaskSetId = taskSet.Id,
+            TaskSet = taskSet,
+            Code = code,
+            Title = $"Задача {number}",
+            Points = 1m
+        };
+        _db.TaskItems.Add(item);
+        await _db.SaveChangesAsync(ct);
+        return item;
+    }
+
     public async Task<OpResult<Unit>> MarkTeamTaskReady(Guid actorId, Guid teamId, Guid taskItemId, CancellationToken ct = default)
     {
         var team = await _db.Teams

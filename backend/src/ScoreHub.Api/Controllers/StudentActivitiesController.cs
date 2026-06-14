@@ -58,6 +58,13 @@ public sealed class StudentActivitiesController : ApiControllerBase
         var uid = CurrentUserId;
         if (uid is null) return Unauthorized();
 
+        var activity = await _db.Activities
+            .AsNoTracking()
+            .Where(a => a.Id == activityId)
+            .Select(a => new { a.Title, a.Type, a.Status, a.TheoryTestUrl, a.TaskFileUrl, a.TaskCount })
+            .FirstOrDefaultAsync(ct);
+        if (activity is null) return NotFound(new { error = "Activity not found" });
+
         var membership = await _db.TeamMembers
             .AsNoTracking()
             .Where(m => m.UserId == uid.Value && m.Team.ActivityId == activityId)
@@ -72,7 +79,25 @@ public sealed class StudentActivitiesController : ApiControllerBase
             .Select(s => new { s.Id, s.TaskItem.Code, Status = s.Status.ToString() })
             .ToListAsync(ct);
 
-        return Ok(new { teamId = membership.TeamId, teamName = membership.Name, tasks });
+        // Ассистент команды (для отображения «кто наш ассистент»)
+        var assistant = await _db.TeamAssistants
+            .AsNoTracking()
+            .Where(ta => ta.TeamId == membership.TeamId)
+            .Join(_db.Users, ta => ta.AssistantId, u => u.Id, (ta, u) => new { u.Id, u.DisplayName })
+            .FirstOrDefaultAsync(ct);
+
+        return Ok(new
+        {
+            teamId = membership.TeamId,
+            teamName = membership.Name,
+            tasks,
+            activityTitle = activity.Title,
+            activityStatus = activity.Status.ToString(),
+            theoryTestUrl = activity.TheoryTestUrl,
+            taskFileUrl = activity.TaskFileUrl,
+            taskCount = activity.TaskCount,
+            assistantName = assistant != null ? assistant.DisplayName : null
+        });
     }
 
     /// <summary>Самостоятельная запись студента на курс по инвайт-коду.</summary>

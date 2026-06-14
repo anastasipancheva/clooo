@@ -39,5 +39,15 @@ public sealed class TeamStudentController : ApiControllerBase
         return r.IsOk ? Ok() : BadRequest(new { error = r.Error });
     }
 
+    /// <summary>Отметить задачу готовой по её номеру (1..«количество задач» занятия).</summary>
+    [HttpPost("{teamId:guid}/tasks/by-number/{taskNumber:int}/ready")]
+    public async Task<IActionResult> MarkReadyByNumber(Guid teamId, int taskNumber, CancellationToken ct)
+    {
+        var uid = CurrentUserId;
+        if (uid is null) return Unauthorized();
+        var r = await _group.MarkTeamTaskReadyByNumber(uid.Value, teamId, taskNumber, ct);
+        return r.IsOk ? Ok() : BadRequest(new { error = r.Error });
+    }
+
     public sealed record HelpBodyDto(string? Message);
 }
