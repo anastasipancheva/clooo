@@ -24,7 +24,12 @@ export interface HelpRequest {
 
 export interface TeamSubmission {
   submissionId: string; teamId: string; teamName: string; taskItemId: string; taskCode: string;
-  status: string; readyAt?: string; reviewerId?: string; defenderUserId?: string;
+  status: string; readyAt?: string; reviewerId?: string; defenderUserId?: string; defenderName?: string;
+}
+
+export interface AttendanceTeam {
+  teamId: string; teamName: string;
+  members: { userId: string; displayName: string; isAbsent: boolean }[];
 }
 
 export interface KtSlot {

@@ -29,7 +29,7 @@ import { Notification } from '../../core/models';
             <div class="bg-[#EAF2FF] rounded-xl border border-[#C7DCFF] p-4 flex items-start justify-between gap-3">
               <div class="space-y-1 flex-1">
                 <p class="text-sm font-semibold text-[#1A1A1B]">{{ n.title }}</p>
-                @if (n.body) { <p class="text-xs text-[#6B7280]">{{ n.body }}</p> }
+                @if (n.body) { <p class="text-xs text-[#6B7280] break-words" [innerHTML]="linkify(n.body)"></p> }
                 <p class="text-xs text-[#9CA3AF]">{{ n.createdAt | date:'short' }}</p>
               </div>
               <button (click)="markRead(n.id)"
@@ -47,7 +47,7 @@ import { Notification } from '../../core/models';
           @for (n of read; track n.id) {
             <div class="bg-white rounded-xl border border-[#E5E7EB] p-4">
               <p class="text-sm font-medium text-[#6B7280]">{{ n.title }}</p>
-              @if (n.body) { <p class="text-xs text-[#9CA3AF] mt-0.5">{{ n.body }}</p> }
+              @if (n.body) { <p class="text-xs text-[#9CA3AF] mt-0.5 break-words" [innerHTML]="linkify(n.body)"></p> }
               <p class="text-xs text-[#9CA3AF] mt-1">{{ n.createdAt | date:'short' }}</p>
             </div>
           }
@@ -67,5 +67,13 @@ export class NotificationsComponent implements OnInit {
   async markRead(id: string) {
     await this.api.markNotificationRead(id).catch(() => {});
     this.list = this.list.map(n => n.id === id ? { ...n, readAt: new Date().toISOString() } : n);
+  }
+
+  // Превращает URL в теле уведомления в кликабельные ссылки (Angular санитайзит innerHTML).
+  linkify(text: string): string {
+    const escaped = text
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return escaped.replace(/(https?:\/\/[^\s]+)/g,
+      '<a href="$1" target="_blank" rel="noopener" class="text-[#005BFF] underline">$1</a>');
   }
 }

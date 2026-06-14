@@ -97,7 +97,7 @@ function defaultAcademicYear() {
                         class="h-7 px-3 rounded-lg bg-[#EAF2FF] text-[#005BFF] text-xs font-medium hover:bg-[#D1E6FF] transition-colors">
                         🔗 Ссылка
                       </button>
-                      <button (click)="deleteCourse(c.id, c.code)"
+                      <button (click)="openDeleteCourse(c.id, c.code)"
                         class="w-8 h-8 flex items-center justify-center rounded-lg text-[#9CA3AF] hover:text-[#EF4444] hover:bg-red-50 transition-colors">
                         🗑
                       </button>
@@ -913,6 +913,26 @@ function defaultAcademicYear() {
       }
       <!-- ══ MODALS (вне вкладок, чтобы открывались на любой вкладке) ══ -->
 
+          <!-- Delete course confirmation (B1) -->
+          @if (deleteCourseModal) {
+            <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" (click)="deleteCourseModal = false">
+              <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl space-y-4" (click)="$event.stopPropagation()">
+                <p class="font-semibold text-[#1A1A1B]">🗑 Удалить курс</p>
+                <p class="text-sm text-[#6B7280]">
+                  Курс <strong>{{ deleteCourseCode }}</strong> будет удалён вместе со всеми модулями,
+                  занятиями, задачами и командами. Это действие необратимо.
+                </p>
+                <div class="flex gap-2 pt-1">
+                  <button (click)="deleteCourseModal = false" [class]="BTN_GHOST + ' flex-1'">Отмена</button>
+                  <button (click)="confirmDeleteCourse()"
+                    class="flex-1 h-9 rounded-lg bg-[#DC2626] text-white text-sm font-medium hover:bg-[#B91C1C] transition-colors">
+                    Удалить курс
+                  </button>
+                </div>
+              </div>
+            </div>
+          }
+
           <!-- Invite link modal -->
           @if (inviteModal) {
             <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" (click)="inviteModal = false">
@@ -1035,6 +1055,11 @@ export class AdminComponent implements OnInit {
   nonHwActivities: TeacherActivity[] = [];
   hwByModule: Map<string, TeacherActivity[]> = new Map();
 
+  // Delete-course modal (B1)
+  deleteCourseModal = false;
+  deleteCourseId = '';
+  deleteCourseCode = '';
+
   // Students tab
   studentsSubTab: StudentsSubTab = 'students';
   courseStudents: { id: string; email: string; displayName: string; role: string }[] = [];
@@ -1108,8 +1133,12 @@ export class AdminComponent implements OnInit {
   get courseStudentsOnly() { return this.courseStudents.filter(u => u.role === 'Student'); }
   get courseAssistants() { return this.courseStudents.filter(u => u.role === 'Assistant'); }
   get lectureActivities() { return this.scheduleActivities.filter(a => a.typeLabel === 'Лекция'); }
-  // Командные занятия: лекции и ДЗ-сессии
-  get teamActivities() { return this.scheduleActivities.filter(a => a.typeLabel === 'Лекция' || a.typeLabel === 'ДЗ-сессия'); }
+  // Командные занятия: лекции и ДЗ-сессии, ещё не прошедшие (нельзя формировать команды для прошедших).
+  get teamActivities() {
+    const now = Date.now();
+    return this.scheduleActivities.filter(a =>
+      (a.typeLabel === 'Лекция' || a.typeLabel === 'ДЗ-сессия') && new Date(a.endsAt).getTime() > now);
+  }
 
   ngOnInit() { this.loadCourses(); }
 
@@ -1176,12 +1205,18 @@ export class AdminComponent implements OnInit {
     } catch (e: unknown) { this.toast.error(e instanceof Error ? e.message : 'Ошибка'); }
   }
 
-  async deleteCourse(courseId: string, code: string) {
-    if (!confirm(`Удалить курс ${code}? Это действие нельзя отменить.`)) return;
+  openDeleteCourse(courseId: string, code: string) {
+    this.deleteCourseId = courseId;
+    this.deleteCourseCode = code;
+    this.deleteCourseModal = true;
+  }
+
+  async confirmDeleteCourse() {
     try {
-      await this.api.deleteCourse(courseId);
+      await this.api.deleteCourse(this.deleteCourseId);
       this.toast.success('Курс удалён');
-      if (this.selected === courseId) this.selected = null;
+      if (this.selected === this.deleteCourseId) this.selected = null;
+      this.deleteCourseModal = false;
       await this.loadCourses();
     } catch (e: unknown) { this.toast.error(e instanceof Error ? e.message : 'Ошибка'); }
   }

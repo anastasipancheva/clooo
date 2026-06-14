@@ -106,6 +106,37 @@ interface ModuleStat {
         </div>
       }
 
+      <!-- Teacher: mark attendance intent on sessions (B6) -->
+      @if (isTeacher && teacherSessions.length > 0) {
+        <div class="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
+          <div class="px-5 py-3 border-b border-[#E5E7EB]">
+            <p class="text-sm font-semibold text-[#1A1A1B]">Отметиться на паре</p>
+            <p class="text-xs text-[#6B7280] mt-0.5">Отметьте занятия, где будете ассистентом. Вас можно будет назначить команде.</p>
+          </div>
+          <div class="divide-y divide-[#F3F4F6]">
+            @for (a of teacherSessions; track a.id) {
+              <div class="px-5 py-3 flex items-center justify-between gap-3">
+                <div>
+                  <p class="text-sm text-[#1A1A1B]">{{ a.title }}</p>
+                  <p class="text-xs text-[#6B7280]">{{ a.courseCode }} · {{ a.typeLabel }} · {{ fmtDate(a.startsAt) }}</p>
+                </div>
+                @if (markedActivityIds.has(a.id)) {
+                  <button (click)="cancelAttend(a.id)"
+                    class="h-8 px-3 rounded-lg border border-[#6EE7B7] bg-[#D1FAE5] text-[#059669] text-xs font-medium hover:bg-[#A7F3D0] transition-colors whitespace-nowrap">
+                    ✓ Буду · отменить
+                  </button>
+                } @else {
+                  <button (click)="attendSession(a.id)"
+                    class="h-8 px-3 rounded-lg bg-[#7C3AED] text-white text-xs font-medium hover:bg-[#6D28D9] transition-colors whitespace-nowrap">
+                    Отметиться
+                  </button>
+                }
+              </div>
+            }
+          </div>
+        </div>
+      }
+
       <!-- Pending applications (#12) -->
       @if (pendingActivities.length > 0) {
         <div class="bg-white rounded-xl border border-[#FDE68A] overflow-hidden">
@@ -225,6 +256,16 @@ export class AssistantIndexComponent implements OnInit {
   appStates: Record<string, AppState> = {};
   moduleStats: ModuleStat[] = [];
   loading = true;
+  // B6 — занятия, на которых преподаватель отметился ассистентом (approved-заявка)
+  markedActivityIds = new Set<string>();
+
+  // Будущие/идущие занятия для преподавателя (отметиться «буду на паре»)
+  get teacherSessions() {
+    const now = Date.now();
+    return this.activities
+      .filter(a => a.status !== 'Finished' && new Date(a.endsAt).getTime() > now)
+      .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
+  }
 
   get isTeacher() { return this.auth.isTeacher(); }
   get activeLectures() { return this.activities.filter(a => a.status === 'Active' && a.type !== 2); }
@@ -279,6 +320,14 @@ export class AssistantIndexComponent implements OnInit {
             moduleTitle: s.moduleTitle,
           } as StudentActivity))
         : acts;
+
+      // B6 — какие занятия преподаватель уже отметил «буду на паре» (approved-заявка)
+      if (this.isTeacher) {
+        try {
+          const myApps = await this.api.myApplications();
+          this.markedActivityIds = new Set(myApps.filter(a => a.status === 'Approved').map(a => a.activityId));
+        } catch { this.markedActivityIds = new Set(); }
+      }
 
       // Build module stats with session details
       const map = new Map<string, ModuleStat>();
@@ -341,6 +390,22 @@ export class AssistantIndexComponent implements OnInit {
       if (msg.includes('Already applied')) { state.done = true; state.status = 'pending'; this.toast.info('Заявка уже подана'); }
       else this.toast.error(msg);
     } finally { state.submitting = false; }
+  }
+
+  // B6 — преподаватель отмечается ассистентом на занятии (auto-approved, отменяемо)
+  async attendSession(activityId: string) {
+    try {
+      await this.api.applyAssistant(activityId);
+      this.markedActivityIds.add(activityId);
+      this.toast.success('Вы отмечены ассистентом на этом занятии');
+    } catch (e: unknown) { this.toast.error(e instanceof Error ? e.message : 'Ошибка'); }
+  }
+  async cancelAttend(activityId: string) {
+    try {
+      await this.api.cancelApplication(activityId);
+      this.markedActivityIds.delete(activityId);
+      this.toast.info('Отметка снята');
+    } catch (e: unknown) { this.toast.error(e instanceof Error ? e.message : 'Ошибка'); }
   }
 
   async cancel(activityId: string) {

@@ -95,7 +95,7 @@ public sealed class StudentActivitiesController : ApiControllerBase
         var activity = await _db.Activities
             .AsNoTracking()
             .Where(a => a.Id == activityId)
-            .Select(a => new { a.Title, a.Type, a.Status, a.TheoryTestUrl, a.TaskFileUrl, a.TaskCount })
+            .Select(a => new { a.Title, a.Type, a.Status, a.PreLectureVideoUrl, a.TheoryTestUrl, a.TaskFileUrl, a.TaskCount })
             .FirstOrDefaultAsync(ct);
         if (activity is null) return NotFound(new { error = "Activity not found" });
 
@@ -127,6 +127,7 @@ public sealed class StudentActivitiesController : ApiControllerBase
             tasks,
             activityTitle = activity.Title,
             activityStatus = activity.Status.ToString(),
+            preLectureVideoUrl = activity.PreLectureVideoUrl,
             theoryTestUrl = activity.TheoryTestUrl,
             taskFileUrl = activity.TaskFileUrl,
             taskCount = activity.TaskCount,

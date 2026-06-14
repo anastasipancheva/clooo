@@ -54,7 +54,8 @@ import { activityTypeIcon, activityTypeIconBg } from '../../core/activity-type';
         <div class="space-y-2">
           <p class="text-xs font-semibold text-[#6B7280] uppercase tracking-wide">Предстоящие занятия</p>
           @for (a of upcoming; track a.id) {
-            <div class="bg-white rounded-xl border border-[#E5E7EB] p-4 flex items-center justify-between">
+            <a [routerLink]="activityHref(a)"
+               class="bg-white rounded-xl border border-[#E5E7EB] p-4 flex items-center justify-between hover:border-[#005BFF]/40 hover:shadow-sm transition-all block">
               <div class="flex items-center gap-3">
                 <div class="w-8 h-8 rounded-lg flex items-center justify-center text-base flex-shrink-0"
                   [class]="actIconBg(a.type)">{{ actIcon(a.type) }}</div>
@@ -64,7 +65,7 @@ import { activityTypeIcon, activityTypeIconBg } from '../../core/activity-type';
                 </div>
               </div>
               <span class="text-xs text-[#D97706] bg-[#FEF3C7] px-2 py-1 rounded-md font-medium">{{ fmtCountdown(a.startsAt) }}</span>
-            </div>
+            </a>
           }
         </div>
       }

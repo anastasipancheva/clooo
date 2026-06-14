@@ -74,7 +74,7 @@ export class ApiService {
       teamId: string; teamName: string;
       tasks: { id: string; code: string; status: string }[];
       activityTitle?: string; activityStatus?: string;
-      theoryTestUrl?: string | null; taskFileUrl?: string | null;
+      preLectureVideoUrl?: string | null; theoryTestUrl?: string | null; taskFileUrl?: string | null;
       taskCount?: number; assistantName?: string | null;
     }>(`/api/activities/${activityId}/my-team`);
   }
@@ -89,11 +89,16 @@ export class ApiService {
   startReview(submissionId: string, defenderUserId: string) {
     return this.post<void>(`/api/submissions/${submissionId}/team-review/start`, { defenderUserId });
   }
-  completeReview(submissionId: string, accepted: boolean, result01: number) {
-    return this.post<void>(`/api/submissions/${submissionId}/team-review/complete`, { accepted, result01 });
+  completeReview(submissionId: string, accepted: boolean, result01: number, defenderCoefficient?: number) {
+    return this.post<void>(`/api/submissions/${submissionId}/team-review/complete`, { accepted, result01, defenderCoefficient });
   }
-  setGroupScore(activityId: string, teamId: string, groupCoefficient: number) {
-    return this.post<void>(`/api/activities/${activityId}/teams/${teamId}/group-score`, { groupCoefficient });
+  // Attendance (assistant)
+  attendanceList(activityId: string) {
+    return this.get<{ teamId: string; teamName: string; members: { userId: string; displayName: string; isAbsent: boolean }[] }[]>(
+      `/api/activities/${activityId}/attendance`);
+  }
+  setAttendance(teamId: string, memberUserId: string, isAbsent: boolean) {
+    return this.post<void>(`/api/teams/${teamId}/members/${memberUserId}/attendance`, { isAbsent });
   }
 
   // KT (assistant)

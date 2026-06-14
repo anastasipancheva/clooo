@@ -58,22 +58,32 @@ import { Subscription } from 'rxjs';
         </div>
       }
 
-      <!-- Materials: links to theory test and task file (#15) -->
-      @if (theoryTestUrl || taskFileUrl) {
+      <!-- Materials (#15 / #B7): video before start; test & tasks only after start -->
+      @if (preLectureVideoUrl || theoryTestUrl || taskFileUrl) {
         <div class="bg-white rounded-xl border border-[#E5E7EB] p-5 space-y-3">
           <p class="text-sm font-semibold text-[#1A1A1B]">Материалы занятия</p>
           <div class="flex flex-col gap-2">
-            @if (theoryTestUrl) {
-              <a [href]="theoryTestUrl" target="_blank" rel="noopener"
+            @if (preLectureVideoUrl) {
+              <a [href]="preLectureVideoUrl" target="_blank" rel="noopener"
                 class="inline-flex items-center gap-2 text-sm text-[#005BFF] hover:underline">
-                📝 Тест по теории
+                🎬 Видео к лекции
               </a>
             }
-            @if (taskFileUrl) {
-              <a [href]="taskFileUrl" target="_blank" rel="noopener"
-                class="inline-flex items-center gap-2 text-sm text-[#005BFF] hover:underline">
-                📄 Файл с задачами
-              </a>
+            @if (started) {
+              @if (theoryTestUrl) {
+                <a [href]="theoryTestUrl" target="_blank" rel="noopener"
+                  class="inline-flex items-center gap-2 text-sm text-[#005BFF] hover:underline">
+                  📝 Тест по теории
+                </a>
+              }
+              @if (taskFileUrl) {
+                <a [href]="taskFileUrl" target="_blank" rel="noopener"
+                  class="inline-flex items-center gap-2 text-sm text-[#005BFF] hover:underline">
+                  📄 Файл с задачами
+                </a>
+              }
+            } @else if (theoryTestUrl || taskFileUrl) {
+              <p class="text-xs text-[#9CA3AF]">Тест и файл с задачами станут доступны после начала занятия.</p>
             }
           </div>
         </div>
@@ -95,8 +105,12 @@ import { Subscription } from 'rxjs';
           <p class="text-xs text-[#9CA3AF] animate-pulse">Загрузка...</p>
         }
 
-        @if (teamId) {
-          <!-- Call assistant -->
+        @if (teamId && !started) {
+          <p class="text-xs text-[#9CA3AF]">Действия команды станут доступны после начала занятия преподавателем.</p>
+        }
+
+        @if (teamId && started) {
+          <!-- Call assistant (#B8 — only when started) -->
           <button (click)="callAssistant()"
             class="h-10 px-5 rounded-lg border border-[#E5E7EB] text-sm text-[#6B7280] font-medium hover:border-[#005BFF] hover:text-[#005BFF] transition-colors">
             🙋 Позвать ассистента
@@ -117,39 +131,13 @@ import { Subscription } from 'rxjs';
                   ✓ Готово
                 </button>
               </div>
+              <p class="text-[11px] text-[#9CA3AF]">Тот, кто отметит задачу готовой, будет её защищать у ассистента.</p>
             } @else {
               <p class="text-xs text-[#9CA3AF]">Преподаватель ещё не указал количество задач.</p>
             }
           </div>
         }
       </div>
-
-      <!-- Tasks list -->
-      @if (tasks.length > 0) {
-        <div class="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
-          <div class="px-5 py-4 border-b border-[#E5E7EB]">
-            <p class="text-sm font-semibold text-[#1A1A1B]">Задачи</p>
-          </div>
-          <div class="divide-y divide-[#F3F4F6]">
-            @for (t of tasks; track t.id) {
-              <div class="flex items-center justify-between px-5 py-3">
-                <span class="text-sm font-mono font-medium text-[#1A1A1B]">{{ t.code }}</span>
-                <div class="flex items-center gap-2">
-                  <span class="text-xs font-medium px-2.5 py-1 rounded-full" [class]="taskStatusClass(t.status)">
-                    {{ t.status }}
-                  </span>
-                  @if (t.status !== 'Accepted') {
-                    <button (click)="markReady(t.id)"
-                      class="h-8 px-3 rounded-lg border border-[#E5E7EB] text-xs text-[#6B7280] font-medium hover:border-[#005BFF] hover:text-[#005BFF] transition-colors">
-                      Готовы сдать
-                    </button>
-                  }
-                </div>
-              </div>
-            }
-          </div>
-        </div>
-      }
     </div>
   `
 })
@@ -167,16 +155,19 @@ export class LectureDetailComponent implements OnInit, OnDestroy {
   teamLoading = true;
   taskNumber: number | null = null;
   taskCount = 0;
+  activityStatus: string | null = null;
+  preLectureVideoUrl: string | null = null;
   theoryTestUrl: string | null = null;
   taskFileUrl: string | null = null;
   assistantName: string | null = null;
-  tasks: { id: string; code: string; status: string }[] = [];
   miniTest: MiniTestDto | null = null;
   answers: Record<string, number> = {};
   testSubmitted = false;
   secondsLeft = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
   private sub?: Subscription;
+
+  get started() { return this.activityStatus === 'Active'; }
 
   ngOnInit() {
     this.activityId = this.route.snapshot.paramMap.get('id') ?? '';
@@ -208,8 +199,9 @@ export class LectureDetailComponent implements OnInit, OnDestroy {
       const data = await this.api.getMyTeam(this.activityId);
       this.teamId = data.teamId;
       this.teamName = data.teamName ?? null;
-      this.tasks = data.tasks ?? [];
       this.taskCount = data.taskCount ?? 0;
+      this.activityStatus = data.activityStatus ?? null;
+      this.preLectureVideoUrl = data.preLectureVideoUrl ?? null;
       this.theoryTestUrl = data.theoryTestUrl ?? null;
       this.taskFileUrl = data.taskFileUrl ?? null;
       this.assistantName = data.assistantName ?? null;
@@ -263,14 +255,6 @@ export class LectureDetailComponent implements OnInit, OnDestroy {
       await this.api.markTeamTaskReadyByNumber(this.teamId, this.taskNumber);
       this.toast.success(`Задача №${this.taskNumber} отмечена готовой`);
       this.loadTeam();
-    } catch (e: unknown) { this.toast.error(e instanceof Error ? e.message : 'Ошибка'); }
-  }
-
-  async markReady(taskItemId: string) {
-    if (!this.teamId) return;
-    try {
-      await this.api.markTeamTaskReady(this.teamId, taskItemId);
-      this.toast.success('Ассистент уведомлён о готовности');
     } catch (e: unknown) { this.toast.error(e instanceof Error ? e.message : 'Ошибка'); }
   }
 
