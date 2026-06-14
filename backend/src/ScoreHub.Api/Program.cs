@@ -20,6 +20,11 @@ builder.Services.AddSignalR();
 
 builder.Services.AddSwaggerGen(c =>
 {
+    // Вложенные DTO разных контроллеров могут иметь одинаковое короткое имя
+    // (напр. EnrollDto). По умолчанию Swashbuckle берёт Type.Name → коллизия schemaId.
+    // Используем полное имя (с заменой '+' у вложенных типов) для уникальности.
+    c.CustomSchemaIds(t => t.FullName?.Replace("+", ".") ?? t.Name);
+
     c.SwaggerDoc("v1", new OpenApiInfo
     {
         Title = "ScoreHub API",

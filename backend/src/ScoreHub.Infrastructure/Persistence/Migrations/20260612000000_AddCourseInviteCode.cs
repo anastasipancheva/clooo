@@ -8,31 +8,23 @@ namespace ScoreHub.Infrastructure.Persistence.Migrations
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // Add column as nullable first
+            // SQLite не поддерживает AlterColumn — добавляем колонку сразу как NOT NULL
+            // с дефолтом '' (существующие строки получат ''), затем заполняем уникальными
+            // кодами и только после этого строим уникальный индекс.
             migrationBuilder.AddColumn<string>(
                 name: "InviteCode",
                 table: "Courses",
                 type: "TEXT",
-                nullable: true);
+                nullable: false,
+                defaultValue: "");
 
             // Backfill existing rows with a random 8-char hex code
             migrationBuilder.Sql(
                 """
                 UPDATE Courses
                 SET InviteCode = lower(hex(randomblob(4)))
-                WHERE InviteCode IS NULL;
+                WHERE InviteCode = '';
                 """);
-
-            // Now make it NOT NULL
-            migrationBuilder.AlterColumn<string>(
-                name: "InviteCode",
-                table: "Courses",
-                type: "TEXT",
-                nullable: false,
-                defaultValue: "",
-                oldClrType: typeof(string),
-                oldType: "TEXT",
-                oldNullable: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_Courses_InviteCode",

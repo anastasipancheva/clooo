@@ -87,41 +87,4 @@ public sealed class CoursesController : ControllerBase
         return Ok(students);
     }
 
-    /// <summary>Записать текущего пользователя на курс по инвайт-коду.</summary>
-    [HttpPost("{courseId:guid}/enroll")]
-    public async Task<IActionResult> Enroll(Guid courseId, [FromBody] EnrollDto dto, CancellationToken ct)
-    {
-        var uid = CurrentUserId;
-        if (uid is null) return Unauthorized();
-
-        var course = await _db.Courses.FirstOrDefaultAsync(c => c.Id == courseId, ct);
-        if (course is null) return NotFound(new { error = "Course not found." });
-
-        // Validate invite code (teachers/admins bypass this check)
-        var isTeacherOrAdmin = User.IsInRole("Teacher") || User.IsInRole("Admin");
-        if (!isTeacherOrAdmin)
-        {
-            if (string.IsNullOrWhiteSpace(dto.InviteCode) ||
-                !string.Equals(course.InviteCode, dto.InviteCode.Trim().ToLowerInvariant(), StringComparison.Ordinal))
-            {
-                return BadRequest(new { error = "Неверный код приглашения." });
-            }
-        }
-
-        var already = await _db.CourseEnrollments
-            .AnyAsync(e => e.CourseId == courseId && e.UserId == uid.Value, ct);
-
-        if (already) return Conflict(new { error = "Already enrolled." });
-
-        _db.CourseEnrollments.Add(new CourseEnrollment
-        {
-            CourseId = courseId,
-            UserId = uid.Value,
-            EnrolledAt = DateTimeOffset.UtcNow
-        });
-        await _db.SaveChangesAsync(ct);
-        return Ok();
-    }
-
-    public sealed record EnrollDto(string? InviteCode);
 }

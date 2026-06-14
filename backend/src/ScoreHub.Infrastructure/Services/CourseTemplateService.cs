@@ -10,14 +10,18 @@ public sealed class CourseTemplateService(ScoreHubDbContext db) : ICourseTemplat
 {
     public async Task<List<TemplateSummary>> ListAsync()
     {
-        return await db.CourseTemplates
+        // Проецируем в SQL (счётчики — корректные коррелированные подзапросы),
+        // а сортировку по CreatedAt делаем в памяти: SQLite не сортирует DateTimeOffset,
+        // и OrderBy поверх проекции с подзапросами не транслируется.
+        var list = await db.CourseTemplates
             .Select(t => new TemplateSummary(
                 t.Id, t.Title, t.Description,
                 t.Modules.Count,
                 t.Modules.SelectMany(m => m.Activities).Count(),
                 t.CreatedAt))
-            .OrderByDescending(t => t.CreatedAt)
             .ToListAsync();
+
+        return list.OrderByDescending(t => t.CreatedAt).ToList();
     }
 
     public async Task<TemplateView?> GetAsync(Guid id)

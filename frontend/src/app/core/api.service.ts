@@ -7,7 +7,7 @@ import {
   HelpRequest, TeamSubmission, KtSlot, KtQueueEntry,
   AssistantApplicationDto, TeacherActivity, ActivityTeam, AssistantSession,
   CourseStructure, User, TemplateSummary, TemplateView,
-  AssistantOwnApplication, MyTeamDto
+  AssistantOwnApplication
 } from './models';
 
 @Injectable({ providedIn: 'root' })
@@ -127,9 +127,6 @@ export class ApiService {
   // Assistant stats
   mySessions() { return this.get<AssistantSession[]>('/api/assistant/my-sessions'); }
   myApplications() { return this.get<AssistantOwnApplication[]>('/api/assistant/my-applications'); }
-
-  // Team (student)
-  myTeam(activityId: string) { return this.get<MyTeamDto>(`/api/activities/${activityId}/my-team`); }
 
   // Admin
   listAllUsers() { return this.get<{ id: string; email: string; displayName: string; role: string }[]>('/api/admin/users'); }
