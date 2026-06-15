@@ -94,7 +94,7 @@ export class ApiService {
   }
   // Attendance (assistant)
   attendanceList(activityId: string) {
-    return this.get<{ teamId: string; teamName: string; members: { userId: string; displayName: string; isAbsent: boolean }[] }[]>(
+    return this.get<{ teamId: string; teamName: string; canEdit: boolean; members: { userId: string; displayName: string; isAbsent: boolean }[] }[]>(
       `/api/activities/${activityId}/attendance`);
   }
   setAttendance(teamId: string, memberUserId: string, isAbsent: boolean) {
@@ -196,6 +196,7 @@ export class ApiService {
   createTeam(activityId: string, name: string) { return this.post<string>(`/api/teaching/activities/${activityId}/teams`, { name }); }
   setTeamMembers(teamId: string, ids: string[]) { return this.put<void>(`/api/teaching/teams/${teamId}/members`, { ids }); }
   setTeamAssistants(teamId: string, ids: string[]) { return this.put<void>(`/api/teaching/teams/${teamId}/assistant-links`, { ids }); }
+  deleteTeam(teamId: string) { return this.delete<void>(`/api/teaching/teams/${teamId}`); }
   // Approved assistants for an activity (for assigning to teams)
   approvedAssistants(activityId: string) {
     return this.get<AssistantApplicationDto[]>(`/api/activities/${activityId}/assistant-applications`);

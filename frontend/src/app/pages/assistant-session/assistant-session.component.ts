@@ -113,11 +113,14 @@ const STATUS_STYLE: Record<string, string> = {
           @if (attendance.length === 0) { <p class="px-5 py-4 text-sm text-[#9CA3AF]">Нет команд</p> }
           @for (t of attendance; track t.teamId) {
             <div class="px-5 py-3">
-              <p class="text-sm font-medium text-[#1A1A1B] mb-2">{{ t.teamName }}</p>
+              <div class="flex items-center gap-2 mb-2">
+                <p class="text-sm font-medium text-[#1A1A1B]">{{ t.teamName }}</p>
+                @if (!t.canEdit) { <span class="text-[10px] text-[#9CA3AF]">(не ваша команда — только просмотр)</span> }
+              </div>
               <div class="flex flex-wrap gap-2">
                 @for (m of t.members; track m.userId) {
-                  <button (click)="toggleAttendance(t.teamId, m)"
-                    class="flex items-center gap-1.5 h-8 px-3 rounded-full text-xs font-medium border transition-colors"
+                  <button (click)="toggleAttendance(t, m)" [disabled]="!t.canEdit"
+                    class="flex items-center gap-1.5 h-8 px-3 rounded-full text-xs font-medium border transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                     [class]="m.isAbsent
                       ? 'bg-[#FEE2E2] text-[#DC2626] border-[#FCA5A5]'
                       : 'bg-[#D1FAE5] text-[#059669] border-[#6EE7B7]'">
@@ -192,10 +195,11 @@ export class AssistantSessionComponent implements OnInit, OnDestroy {
     } catch (e: unknown) { this.toast.error(e instanceof Error ? e.message : 'Ошибка'); }
   }
 
-  async toggleAttendance(teamId: string, m: { userId: string; isAbsent: boolean }) {
+  async toggleAttendance(t: AttendanceTeam, m: { userId: string; isAbsent: boolean }) {
+    if (!t.canEdit) return;
     const next = !m.isAbsent;
     try {
-      await this.api.setAttendance(teamId, m.userId, next);
+      await this.api.setAttendance(t.teamId, m.userId, next);
       m.isAbsent = next;
     } catch (e: unknown) { this.toast.error(e instanceof Error ? e.message : 'Ошибка'); }
   }

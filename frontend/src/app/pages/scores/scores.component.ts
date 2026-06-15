@@ -11,7 +11,7 @@ import { Course, StudentScore } from '../../core/models';
   imports: [RouterLink, CommonModule],
   template: `
     <div class="space-y-6 max-w-2xl">
-      <h1 class="text-lg font-semibold text-[#1A1A1B]">Мои баллы</h1>
+      <h1 class="text-lg font-semibold text-[#1A1A1B]">{{ isStaff ? 'Баллы' : 'Мои баллы' }}</h1>
       <div class="bg-white rounded-xl border border-[#E5E7EB] p-4">
         <p class="text-xs font-medium text-[#6B7280] mb-3 uppercase tracking-wide">Выберите курс</p>
         <div class="flex flex-wrap gap-2">
@@ -31,13 +31,35 @@ import { Course, StudentScore } from '../../core/models';
         </div>
       </div>
 
-      @if (selected() && !score()) {
+      <!-- Assistant/teacher: full course scoreboard -->
+      @if (isStaff && selected()) {
+        @if (allScores().length === 0) {
+          <div class="bg-white rounded-xl border border-[#E5E7EB] p-8 text-center text-sm text-[#9CA3AF]">Нет данных по баллам</div>
+        } @else {
+          <div class="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
+            <div class="px-5 py-3 border-b border-[#E5E7EB]"><span class="text-sm font-semibold text-[#1A1A1B]">Баллы потока</span></div>
+            <div class="divide-y divide-[#F3F4F6]">
+              @for (s of allScores(); track s.studentId) {
+                <div class="px-5 py-3 flex items-center justify-between gap-3">
+                  <span class="text-sm text-[#1A1A1B] truncate">{{ s.displayName }}</span>
+                  <div class="flex items-center gap-3 shrink-0">
+                    <span class="text-sm text-[#6B7280]">{{ s.finalScore.toFixed(1) }}</span>
+                    <span class="text-xs font-bold px-2.5 py-1 rounded-full" [class]="markColor(s.mark)">{{ s.mark }}</span>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+        }
+      }
+
+      @if (!isStaff && selected() && !score()) {
         <div class="bg-white rounded-xl border border-[#E5E7EB] p-8 text-center text-sm text-[#9CA3AF]">
           Нет данных по баллам
         </div>
       }
 
-      @if (selected() && score(); as s) {
+      @if (!isStaff && selected() && score(); as s) {
         <div class="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
           <div class="px-5 py-4 border-b border-[#E5E7EB] flex items-center justify-between">
             <span class="text-sm font-semibold text-[#1A1A1B]">{{ s.displayName }}</span>
@@ -68,6 +90,9 @@ export class ScoresComponent implements OnInit {
   courseList: Course[] = [];
   selected = signal<string | null>(null);
   score = signal<StudentScore | null>(null);
+  allScores = signal<StudentScore[]>([]);
+
+  get isStaff() { return this.auth.isAssistant() || this.auth.isTeacher(); }
 
   ngOnInit() {
     Promise.all([this.api.listCourses(), this.api.myActivities()])
@@ -81,10 +106,15 @@ export class ScoresComponent implements OnInit {
   async selectCourse(id: string) {
     this.selected.set(this.selected() === id ? null : id);
     this.score.set(null);
+    this.allScores.set([]);
     if (this.selected()) {
-      const userId = this.auth.user()?.id;
       const all = await this.api.courseScores(id).catch(() => [] as StudentScore[]);
-      this.score.set(all.find(s => s.studentId === userId) ?? null);
+      if (this.isStaff) {
+        this.allScores.set(all);
+      } else {
+        const userId = this.auth.user()?.id;
+        this.score.set(all.find(s => s.studentId === userId) ?? null);
+      }
     }
   }
 

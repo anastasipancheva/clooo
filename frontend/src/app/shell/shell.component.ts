@@ -81,7 +81,7 @@ export class ShellComponent implements OnInit, OnDestroy {
     return [
       { href: '/', label: 'Главная', exact: true, show: isStudent || isAssistant },
       { href: '/calendar', label: 'Календарь', exact: false, show: isStudent || isAssistant },
-      { href: '/scores', label: 'Баллы', exact: false, show: isStudent },
+      { href: '/scores', label: 'Баллы', exact: false, show: isStudent || isAssistant },
       { href: '/courses', label: 'Курсы', exact: false, show: isStudent || isAssistant },
       { href: '/assistant', label: 'Ассистент', exact: false, show: isAssistant || isTeacher },
       { href: '/admin', label: 'Управление', exact: false, show: isTeacher },

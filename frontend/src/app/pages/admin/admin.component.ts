@@ -667,7 +667,7 @@ function defaultAcademicYear() {
       @if (tab === 'teams' && selected) {
         <div class="space-y-5">
           <div class="bg-white rounded-xl border border-[#E5E7EB] p-5">
-            <p class="text-xs font-semibold text-[#6B7280] uppercase tracking-wide mb-3">Команды (лекции и ДЗ-сессии)</p>
+            <p class="text-xs font-semibold text-[#6B7280] uppercase tracking-wide mb-3">Команды (только для лекций)</p>
             <div class="flex flex-wrap gap-3 items-end">
               <div>
                 <label class="block text-xs text-[#6B7280] mb-1">Занятие</label>
@@ -693,7 +693,7 @@ function defaultAcademicYear() {
               Ниже можно создавать и редактировать команды вручную.
             </p>
             @if (teamActivities.length === 0 && !scheduleLoading) {
-              <p class="text-xs text-[#EF4444] mt-2">Нет лекций/ДЗ-сессий в расписании.</p>
+              <p class="text-xs text-[#EF4444] mt-2">Нет предстоящих лекций в расписании.</p>
             }
             @if (teamsActivityId) {
               <div class="flex flex-wrap gap-2 items-end mt-3 pt-3 border-t border-[#F3F4F6]">
@@ -715,8 +715,12 @@ function defaultAcademicYear() {
                   <div class="flex items-center justify-between mb-2">
                     <p class="text-sm font-semibold text-[#1A1A1B]">{{ t.name }}</p>
                     @if (editingTeamId !== t.id) {
-                      <button (click)="startEditMembers(t)"
-                        class="text-xs text-[#6B7280] hover:text-[#005BFF]">✏️ Состав</button>
+                      <div class="flex items-center gap-2">
+                        <button (click)="startEditMembers(t)"
+                          class="text-xs text-[#6B7280] hover:text-[#005BFF]">✏️ Состав</button>
+                        <button (click)="deleteTeam(t)"
+                          class="text-xs text-[#9CA3AF] hover:text-[#EF4444]" title="Удалить команду">🗑</button>
+                      </div>
                     }
                   </div>
 
@@ -824,20 +828,6 @@ function defaultAcademicYear() {
                         <input [class]="INPUT + ' flex-1 min-w-32'" [(ngModel)]="a.title" placeholder="Название занятия" />
                         <button (click)="tplRemoveActivity(mi, ai)" class="text-[#EF4444] text-xs">✕</button>
                       </div>
-                      <!-- Tasks for this activity -->
-                      @if (a.tasks.length > 0) {
-                        <div class="pl-4 pt-1 space-y-1">
-                          @for (t of a.tasks; track t; let ti = $index) {
-                            <div class="flex items-center gap-1.5">
-                              <input [class]="INPUT + ' w-16 h-7 text-xs'" [(ngModel)]="t.code" placeholder="Код" />
-                              <input [class]="INPUT + ' flex-1 h-7 text-xs'" [(ngModel)]="t.title" placeholder="Название задачи" />
-                              <input [class]="INPUT + ' w-14 h-7 text-xs'" type="number" min="0.5" step="0.5" [(ngModel)]="t.points" placeholder="Балл" />
-                              <button (click)="tplRemoveTask(mi, ai, ti)" class="text-[#EF4444] text-xs w-5">✕</button>
-                            </div>
-                          }
-                        </div>
-                      }
-                      <button (click)="tplAddTask(mi, ai)" class="text-[10px] text-[#6B7280] hover:text-[#005BFF] ml-4 mt-0.5">+ задача</button>
                     }
                     <button (click)="tplAddActivity(mi)" class="text-xs text-[#005BFF] hover:underline">+ занятие</button>
                   </div>
@@ -1133,11 +1123,10 @@ export class AdminComponent implements OnInit {
   get courseStudentsOnly() { return this.courseStudents.filter(u => u.role === 'Student'); }
   get courseAssistants() { return this.courseStudents.filter(u => u.role === 'Assistant'); }
   get lectureActivities() { return this.scheduleActivities.filter(a => a.typeLabel === 'Лекция'); }
-  // Командные занятия: лекции и ДЗ-сессии, ещё не прошедшие (нельзя формировать команды для прошедших).
+  // Команды формируются только для лекций, ещё не прошедших.
   get teamActivities() {
     const now = Date.now();
-    return this.scheduleActivities.filter(a =>
-      (a.typeLabel === 'Лекция' || a.typeLabel === 'ДЗ-сессия') && new Date(a.endsAt).getTime() > now);
+    return this.scheduleActivities.filter(a => a.typeLabel === 'Лекция' && new Date(a.endsAt).getTime() > now);
   }
 
   ngOnInit() { this.loadCourses(); }
@@ -1435,6 +1424,14 @@ export class AdminComponent implements OnInit {
       this.editingTeamId = null;
       await this.onTeamsActivityChange(this.teamsActivityId);
       this.toast.success('Состав команды обновлён');
+    } catch (e: unknown) { this.toast.error(e instanceof Error ? e.message : 'Ошибка'); }
+  }
+
+  async deleteTeam(t: ActivityTeam) {
+    try {
+      await this.api.deleteTeam(t.id);
+      await this.onTeamsActivityChange(this.teamsActivityId);
+      this.toast.success(`Команда «${t.name}» удалена`);
     } catch (e: unknown) { this.toast.error(e instanceof Error ? e.message : 'Ошибка'); }
   }
 

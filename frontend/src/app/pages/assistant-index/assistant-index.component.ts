@@ -258,6 +258,8 @@ export class AssistantIndexComponent implements OnInit {
   loading = true;
   // B6 — занятия, на которых преподаватель отметился ассистентом (approved-заявка)
   markedActivityIds = new Set<string>();
+  // C11 — занятия, на которые ассистент одобрен/назначен (можно входить и вести приём)
+  approvedActivityIds = new Set<string>();
 
   // Будущие/идущие занятия для преподавателя (отметиться «буду на паре»)
   get teacherSessions() {
@@ -268,8 +270,10 @@ export class AssistantIndexComponent implements OnInit {
   }
 
   get isTeacher() { return this.auth.isTeacher(); }
-  get activeLectures() { return this.activities.filter(a => a.status === 'Active' && a.type !== 2); }
-  get activeKts()      { return this.activities.filter(a => a.status === 'Active' && a.type === 2); }
+  // Войти в активную пару можно только если занятие одобрено/назначено (препод — везде).
+  private canEnter(a: StudentActivity) { return this.isTeacher || this.approvedActivityIds.has(a.id); }
+  get activeLectures() { return this.activities.filter(a => a.status === 'Active' && a.type !== 2 && this.canEnter(a)); }
+  get activeKts()      { return this.activities.filter(a => a.status === 'Active' && a.type === 2 && this.canEnter(a)); }
   get totalSessions()  { return this.moduleStats.reduce((s, m) => s + m.count, 0); }
 
   // Only show "apply" for activities where application is NOT approved/pending,
@@ -348,7 +352,8 @@ export class AssistantIndexComponent implements OnInit {
         .sort((a, b) => a.courseCode.localeCompare(b.courseCode) || a.moduleNumber - b.moduleNumber);
 
       // Load existing applications for each activity to set correct state
-      const approvedActivityIds = new Set(sessions.map(s => s.activityId));
+      this.approvedActivityIds = new Set(sessions.map(s => s.activityId));
+      const approvedActivityIds = this.approvedActivityIds;
 
       for (const a of acts) {
         if (approvedActivityIds.has(a.id)) {

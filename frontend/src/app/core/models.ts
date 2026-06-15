@@ -28,7 +28,7 @@ export interface TeamSubmission {
 }
 
 export interface AttendanceTeam {
-  teamId: string; teamName: string;
+  teamId: string; teamName: string; canEdit: boolean;
   members: { userId: string; displayName: string; isAbsent: boolean }[];
 }
 
