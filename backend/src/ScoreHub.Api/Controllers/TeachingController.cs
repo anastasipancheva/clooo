@@ -243,19 +243,19 @@ public sealed class TeachingController : ApiControllerBase
         if (activity.EndsAt < DateTimeOffset.UtcNow)
             return BadRequest(new { error = "Нельзя начать занятие, время которого уже прошло." });
 
-        // #9 — командные занятия (лекция / ДЗ-сессия) нельзя начать без команд.
-        if (activity.Type is ActivityType.Lecture or ActivityType.HomeworkSession)
+        // Лекцию нельзя начать без команд (для ДЗ-сессий команды не используются).
+        if (activity.Type == ActivityType.Lecture)
         {
             var hasTeams = await _db.Teams.AnyAsync(t => t.ActivityId == activityId, ct);
             if (!hasTeams)
-                return BadRequest(new { error = "Сначала сформируйте команды для занятия." });
+                return BadRequest(new { error = "Сначала сформируйте команды для лекции." });
         }
 
         activity.Status = ActivityStatus.Active;
 
         // B5 — команды без ассистента получают преподавателя, который начал занятие.
         var teacherId = CurrentUserId;
-        if (teacherId is not null && activity.Type is ActivityType.Lecture or ActivityType.HomeworkSession)
+        if (teacherId is not null && activity.Type == ActivityType.Lecture)
         {
             var teamsNoAssistant = await _db.Teams
                 .Include(t => t.Assistants)
@@ -279,18 +279,22 @@ public sealed class TeachingController : ApiControllerBase
         // Уведомления — некритичны, не блокируем ответ при ошибке SignalR/DB
         try
         {
-            var enrolledIds = await _db.CourseEnrollments
+            // Уведомление о начале занятия (со ссылкой на тест) получают только студенты,
+            // записанные на курс. Ассистентам/преподавателям оно не приходит.
+            var studentIds = await _db.CourseEnrollments
                 .Where(e => e.CourseId == activity.Module.CourseId)
-                .Select(e => e.UserId)
+                .Join(_db.Users, e => e.UserId, u => u.Id, (e, u) => u)
+                .Where(u => u.Role == UserRole.Student)
+                .Select(u => u.Id)
                 .ToListAsync(ct);
 
-            if (enrolledIds.Count > 0)
+            if (studentIds.Count > 0)
             {
                 string? body = activity.TheoryTestUrl is not null
                     ? $"Ссылка на тест: {activity.TheoryTestUrl}"
                     : null;
                 await _notifications.NotifyManyAsync(
-                    enrolledIds,
+                    studentIds,
                     "ActivityStarted",
                     $"Занятие началось: {activity.Title}",
                     body,
@@ -478,9 +482,27 @@ public sealed class TeachingController : ApiControllerBase
     {
         var module = await _db.Modules.FirstOrDefaultAsync(m => m.Id == moduleId, ct);
         if (module is null) return NotFound();
+
+        var newStart = dto.StartsAt ?? module.StartsAt;
+        var newEnd   = dto.EndsAt   ?? module.EndsAt;
+        if (newEnd < newStart)
+            return BadRequest(new { error = "Дата окончания модуля раньше даты начала." });
+
+        // C2 — модули не должны пересекаться по датам больше чем на 1 день.
+        var others = await _db.Modules
+            .Where(x => x.CourseId == module.CourseId && x.Id != moduleId)
+            .Select(x => new { x.StartsAt, x.EndsAt }).ToListAsync(ct);
+        foreach (var o in others)
+        {
+            var overlapStart = newStart > o.StartsAt ? newStart : o.StartsAt;
+            var overlapEnd = newEnd < o.EndsAt ? newEnd : o.EndsAt;
+            if (overlapEnd - overlapStart > TimeSpan.FromDays(1))
+                return BadRequest(new { error = "Модули не должны пересекаться по датам более чем на 1 день." });
+        }
+
         if (dto.Title is not null) module.Title = dto.Title.Trim();
-        if (dto.StartsAt.HasValue) module.StartsAt = dto.StartsAt.Value;
-        if (dto.EndsAt.HasValue)   module.EndsAt   = dto.EndsAt.Value;
+        module.StartsAt = newStart;
+        module.EndsAt   = newEnd;
         await _db.SaveChangesAsync(ct);
         return Ok();
     }
@@ -566,6 +588,12 @@ public sealed class TeachingController : ApiControllerBase
             .Include(a => a.Module)
             .FirstOrDefaultAsync(a => a.Id == activityId, ct);
         if (activity is null) return NotFound();
+
+        if (activity.Type != ActivityType.Lecture)
+            return BadRequest(new { error = "Команды генерируются только для лекций." });
+
+        if (activity.Status == ActivityStatus.Finished)
+            return BadRequest(new { error = "Занятие завершено — команды менять нельзя." });
 
         if (activity.EndsAt < DateTimeOffset.UtcNow)
             return BadRequest(new { error = "Нельзя формировать команды для прошедшего занятия." });
@@ -664,6 +692,23 @@ public sealed class TeachingController : ApiControllerBase
             })
             .ToListAsync(ct);
         return Ok(teams);
+    }
+
+    /// <summary>Удалить команду занятия (вместе с участниками, ассистентами и сдачами).</summary>
+    [HttpDelete("teams/{teamId:guid}")]
+    public async Task<IActionResult> DeleteTeam(Guid teamId, CancellationToken ct)
+    {
+        var team = await _db.Teams.Include(t => t.Activity).FirstOrDefaultAsync(t => t.Id == teamId, ct);
+        if (team is null) return NotFound();
+        if (team.Activity.Status == ActivityStatus.Finished)
+            return BadRequest(new { error = "Занятие завершено — команды менять нельзя." });
+
+        await _db.TeamMembers.Where(m => m.TeamId == teamId).ExecuteDeleteAsync(ct);
+        await _db.TeamAssistants.Where(a => a.TeamId == teamId).ExecuteDeleteAsync(ct);
+        await _db.TaskSubmissions.Where(s => s.TeamId == teamId).ExecuteDeleteAsync(ct);
+        _db.Teams.Remove(team);
+        await _db.SaveChangesAsync(ct);
+        return Ok();
     }
 
     public sealed record CreateCourseDto(string Code, string Title, string AcademicYear);

@@ -63,6 +63,17 @@ public sealed class TeachingSetupService : ITeachingSetupService
         if (await _db.Modules.AnyAsync(x => x.CourseId == courseId && x.Number == number, ct))
             return OpResult<Guid>.Fail($"Модуль с номером {number} уже существует в этом курсе.");
 
+        // Модули не должны пересекаться по датам больше чем на 1 день.
+        var others = await _db.Modules.Where(x => x.CourseId == courseId)
+            .Select(x => new { x.StartsAt, x.EndsAt }).ToListAsync(ct);
+        foreach (var o in others)
+        {
+            var overlapStart = startsAt > o.StartsAt ? startsAt : o.StartsAt;
+            var overlapEnd = endsAt < o.EndsAt ? endsAt : o.EndsAt;
+            if (overlapEnd - overlapStart > TimeSpan.FromDays(1))
+                return OpResult<Guid>.Fail("Модули не должны пересекаться по датам более чем на 1 день.");
+        }
+
         var m = new Module
         {
             Id = Guid.NewGuid(),
@@ -196,6 +207,8 @@ public sealed class TeachingSetupService : ITeachingSetupService
         var activity = await _db.Activities.FirstOrDefaultAsync(x => x.Id == activityId, ct);
         if (activity is null)
             return OpResult<Guid>.Fail("Занятие не найдено.");
+        if (activity.Status == ActivityStatus.Finished)
+            return OpResult<Guid>.Fail("Занятие завершено — команды менять нельзя.");
         if (activity.EndsAt < DateTimeOffset.UtcNow)
             return OpResult<Guid>.Fail("Нельзя создавать команды для прошедшего занятия.");
 
@@ -214,6 +227,8 @@ public sealed class TeachingSetupService : ITeachingSetupService
         var team = await _db.Teams.Include(t => t.Activity).FirstOrDefaultAsync(t => t.Id == teamId, ct);
         if (team is null)
             return OpResult<Unit>.Fail("Команда не найдена.");
+        if (team.Activity.Status == ActivityStatus.Finished)
+            return OpResult<Unit>.Fail("Занятие завершено — состав команд менять нельзя.");
         if (team.Activity.EndsAt < DateTimeOffset.UtcNow)
             return OpResult<Unit>.Fail("Нельзя менять состав команд для прошедшего занятия.");
 

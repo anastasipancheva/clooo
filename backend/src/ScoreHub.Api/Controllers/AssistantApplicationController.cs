@@ -106,10 +106,22 @@ public sealed class AssistantApplicationController : ApiControllerBase
         var app = await _db.AssistantApplications
             .FirstOrDefaultAsync(a => a.ActivityId == activityId && a.AssistantId == uid.Value, ct);
         if (app is null) return NotFound();
-        if (app.Status == "Approved")
-            return BadRequest(new { error = "Заявка уже одобрена, отменить нельзя." });
 
+        var status = await _db.Activities.Where(a => a.Id == activityId).Select(a => a.Status).FirstOrDefaultAsync(ct);
+        if (status is Domain.Enums.ActivityStatus.Active or Domain.Enums.ActivityStatus.Finished)
+            return BadRequest(new { error = "Занятие уже идёт или завершено — отменить нельзя." });
+
+        // Снимаем заявку и связанные назначения (ассистент занятия + закрепления за командами).
         _db.AssistantApplications.Remove(app);
+        await _db.ActivityAssistants
+            .Where(aa => aa.ActivityId == activityId && aa.AssistantId == uid.Value)
+            .ExecuteDeleteAsync(ct);
+        var teamIds = await _db.Teams.Where(t => t.ActivityId == activityId).Select(t => t.Id).ToListAsync(ct);
+        if (teamIds.Count > 0)
+            await _db.TeamAssistants
+                .Where(ta => teamIds.Contains(ta.TeamId) && ta.AssistantId == uid.Value)
+                .ExecuteDeleteAsync(ct);
+
         await _db.SaveChangesAsync(ct);
         return Ok();
     }

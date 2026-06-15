@@ -61,10 +61,8 @@ public sealed class GroupActivityService : IGroupActivityService
         _db.TeamHelpRequests.Add(hr);
         await _db.SaveChangesAsync(ct);
 
-        var recipients = team.Members.Select(m => m.UserId)
-            .Concat(team.Assistants.Select(a => a.AssistantId))
-            .Distinct()
-            .ToList();
+        // Уведомление о вызове ассистента получают только ассистенты команды (не студенты).
+        var recipients = team.Assistants.Select(a => a.AssistantId).Distinct().ToList();
 
         await _notify.NotifyManyAsync(
             recipients,
@@ -196,14 +194,14 @@ public sealed class GroupActivityService : IGroupActivityService
 
         await _db.SaveChangesAsync(ct);
 
+        // О готовности сдать задачу уведомляются только ассистенты команды (не студенты).
         var assistantIds = await _db.TeamAssistants
             .Where(x => x.TeamId == teamId)
             .Select(x => x.AssistantId)
             .ToListAsync(ct);
 
-        var memberIds = team.Members.Select(m => m.UserId).ToList();
         await _notify.NotifyManyAsync(
-            assistantIds.Concat(memberIds).Distinct().ToList(),
+            assistantIds.Distinct().ToList(),
             "TeamReadyToDefend",
             $"Команда «{team.Name}» готова сдать {task.Code}",
             null,
@@ -427,19 +425,35 @@ public sealed class GroupActivityService : IGroupActivityService
         if (actor is null || !CanAssist(actor.Role))
             return OpResult<IReadOnlyList<TeamAttendanceRow>>.Fail("Недостаточно прав.");
 
-        var teamsQuery = _db.Teams.AsNoTracking().Where(t => t.ActivityId == activityId);
-        if (actor.Role is not (UserRole.Teacher or UserRole.Admin))
-            teamsQuery = teamsQuery.Where(t => _db.TeamAssistants.Any(a => a.TeamId == t.Id && a.AssistantId == actorId));
+        var isAdmin = actor.Role == UserRole.Admin;
+        var seesAll = actor.Role is UserRole.Teacher or UserRole.Admin;
 
-        var rows = await teamsQuery
-            .Select(t => new TeamAttendanceRow(
+        // Команды, за которые actor закреплён (для определения, какие он может редактировать).
+        var assignedTeamIds = (await _db.Teams
+            .Where(t => t.ActivityId == activityId && _db.TeamAssistants.Any(a => a.TeamId == t.Id && a.AssistantId == actorId))
+            .Select(t => t.Id)
+            .ToListAsync(ct)).ToHashSet();
+
+        // Ассистент видит только свои команды; преподаватель/админ — все.
+        var teamsQuery = _db.Teams.AsNoTracking().Where(t => t.ActivityId == activityId);
+        if (!seesAll)
+            teamsQuery = teamsQuery.Where(t => assignedTeamIds.Contains(t.Id));
+
+        var raw = await teamsQuery
+            .Select(t => new {
                 t.Id,
                 t.Name,
-                t.Members.Select(m => new TeamAttendanceMember(
+                Members = t.Members.Select(m => new TeamAttendanceMember(
                     m.UserId,
                     _db.Users.Where(u => u.Id == m.UserId).Select(u => u.DisplayName).FirstOrDefault() ?? "?",
-                    m.IsAbsent)).ToList()))
+                    m.IsAbsent)).ToList()
+            })
             .ToListAsync(ct);
+
+        // canEdit: админ — всегда; иначе только закреплённые команды.
+        var rows = raw
+            .Select(t => new TeamAttendanceRow(t.Id, t.Name, isAdmin || assignedTeamIds.Contains(t.Id), t.Members))
+            .ToList();
 
         return OpResult<IReadOnlyList<TeamAttendanceRow>>.Ok(rows);
     }
@@ -456,10 +470,11 @@ public sealed class GroupActivityService : IGroupActivityService
         if (team.Activity.Status == ActivityStatus.Finished)
             return OpResult<Unit>.Fail("Занятие завершено — отметки изменить нельзя.");
 
-        var isElevated = actor.Role is UserRole.Teacher or UserRole.Admin;
+        // Отмечать присутствие можно только в закреплённых за собой командах (админ — в любых).
+        var isAdmin = actor.Role == UserRole.Admin;
         var isAssigned = await _db.TeamAssistants.AnyAsync(x => x.TeamId == teamId && x.AssistantId == actorId, ct);
-        if (!isElevated && !isAssigned)
-            return OpResult<Unit>.Fail("Вы не закреплены за этой командой.");
+        if (!isAdmin && !isAssigned)
+            return OpResult<Unit>.Fail("Вы можете отмечать только закреплённые за вами команды.");
 
         var member = await _db.TeamMembers.FirstOrDefaultAsync(m => m.TeamId == teamId && m.UserId == memberUserId, ct);
         if (member is null) return OpResult<Unit>.Fail("Участник не найден в команде.");

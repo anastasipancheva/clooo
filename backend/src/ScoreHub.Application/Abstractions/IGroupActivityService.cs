@@ -25,7 +25,7 @@ public interface IGroupActivityService
 }
 
 public sealed record TeamAttendanceMember(Guid UserId, string DisplayName, bool IsAbsent);
-public sealed record TeamAttendanceRow(Guid TeamId, string TeamName, IReadOnlyList<TeamAttendanceMember> Members);
+public sealed record TeamAttendanceRow(Guid TeamId, string TeamName, bool CanEdit, IReadOnlyList<TeamAttendanceMember> Members);
 
 public sealed record HelpRequestRow(Guid Id, Guid TeamId, string TeamName, Guid CreatedByUserId, DateTimeOffset CreatedAt, string? Message);
 
