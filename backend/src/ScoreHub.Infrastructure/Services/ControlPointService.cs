@@ -20,8 +20,8 @@ public sealed class ControlPointService : IControlPointService
 
     private static bool CanAssist(UserRole r) => r is UserRole.Assistant or UserRole.Teacher or UserRole.Admin;
 
-    private static bool WithinWindow(Activity a) =>
-        DateTimeOffset.UtcNow >= a.StartsAt && DateTimeOffset.UtcNow <= a.EndsAt;
+    // КТ «открыта», когда преподаватель её запустил (Status = Active), а не по расписанию.
+    private static bool IsLive(Activity a) => a.Status == ActivityStatus.Active;
 
     private Task<bool> StudentHasConcurrentReviewAsync(Guid activityId, Guid studentId, Guid? exceptSubmissionId, CancellationToken ct) =>
         _db.TaskSubmissions.AnyAsync(
@@ -40,8 +40,8 @@ public sealed class ControlPointService : IControlPointService
         if (activity.Type != ActivityType.ControlPoint)
             return OpResult<Unit>.Fail("Это не контрольная точка.");
 
-        if (!WithinWindow(activity))
-            return OpResult<Unit>.Fail("Вне времени занятия.");
+        if (!IsLive(activity))
+            return OpResult<Unit>.Fail("КТ не запущена преподавателем.");
 
         var task = await _db.TaskItems.Include(t => t.TaskSet).FirstOrDefaultAsync(t => t.Id == taskItemId, ct);
         if (task is null || task.TaskSet.ActivityId != activityId)
@@ -150,8 +150,8 @@ public sealed class ControlPointService : IControlPointService
         if (activity is null || activity.Type != ActivityType.ControlPoint)
             return OpResult<Unit>.Fail("Неверное занятие.");
 
-        if (!WithinWindow(activity) && actor.Role is not (UserRole.Teacher or UserRole.Admin))
-            return OpResult<Unit>.Fail("Вне времени занятия.");
+        if (!IsLive(activity) && actor.Role is not (UserRole.Teacher or UserRole.Admin))
+            return OpResult<Unit>.Fail("КТ не запущена преподавателем.");
 
         await using var tx = await _db.Database.BeginTransactionAsync(ct);
 

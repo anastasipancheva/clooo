@@ -34,11 +34,12 @@ public sealed class ScoringService : IScoringService
         var course = ktActivity.Module.Course;
         var multiplierMap = JsonSerializer.Deserialize<List<KtMapEntry>>(course.KtMultiplierMapJson) ?? [];
 
-        // Get all students in this course
-        var allStudentIds = await _db.TeamMembers
-            .Where(m => m.Team.Activity.Module.CourseId == course.Id)
-            .Select(m => m.UserId)
-            .Distinct()
+        // Все записанные на курс студенты (КТ индивидуальна и команд может не быть).
+        var allStudentIds = await _db.CourseEnrollments
+            .Where(e => e.CourseId == course.Id)
+            .Join(_db.Users, e => e.UserId, u => u.Id, (e, u) => u)
+            .Where(u => u.Role == UserRole.Student)
+            .Select(u => u.Id)
             .ToListAsync(ct);
 
         // KT tasks count for this activity
