@@ -126,10 +126,12 @@ public sealed class ScoringService : IScoringService
             foreach (var s in acceptedSubs)
                 lectureScore += (s.DefenderUserId == studentId) ? (s.DefenderCoefficient ?? 1.0m) : 1.0m;
 
-            // Add mini-test bonus
-            var bonus = await _db.MiniTestAnswers
+            // Add mini-test bonus (SQLite не умеет SUM по decimal — суммируем в памяти).
+            var bonuses = await _db.MiniTestAnswers
                 .Where(a => a.ActivityId == actId && a.StudentId == studentId)
-                .SumAsync(a => (decimal?)a.BonusAwarded, ct) ?? 0;
+                .Select(a => a.BonusAwarded)
+                .ToListAsync(ct);
+            var bonus = bonuses.Sum();
 
             total += lectureScore + bonus;
         }

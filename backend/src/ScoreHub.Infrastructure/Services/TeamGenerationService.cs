@@ -208,25 +208,27 @@ public sealed class TeamGenerationService : ITeamGenerationService
         var rawScores = new Dictionary<Guid, decimal>();
         foreach (var sid in studentIds)
         {
-            var lectureScore = await _db.TeamGroupScores
+            // SQLite не умеет SUM по decimal — суммируем в памяти.
+            var bp = await _db.TeamGroupScores
                 .Where(s => s.Team.Activity.Module.CourseId == courseId
                     && s.Team.Members.Any(m => m.UserId == sid))
-                .SumAsync(s => (decimal?)s.BasePoints, ct) ?? 0;
-            rawScores[sid] = lectureScore;
+                .Select(s => s.BasePoints)
+                .ToListAsync(ct);
+            rawScores[sid] = bp.Sum();
         }
         return studentIds.OrderByDescending(id => rawScores.GetValueOrDefault(id)).ToList();
     }
 
     private async Task<List<Guid>> SortByFinalScore(List<Guid> studentIds, Guid courseId, CancellationToken ct)
     {
-        var scores = await _db.StudentActivityScores
+        // SQLite не умеет SUM/GroupBy по decimal в SQL — агрегируем в памяти.
+        var rows = await _db.StudentActivityScores
             .AsNoTracking()
             .Where(s => s.CourseId == courseId && studentIds.Contains(s.StudentId))
-            .GroupBy(s => s.StudentId)
-            .Select(g => new { StudentId = g.Key, Total = g.Sum(s => s.ModuleScore) })
+            .Select(s => new { s.StudentId, s.ModuleScore })
             .ToListAsync(ct);
 
-        var dict = scores.ToDictionary(s => s.StudentId, s => s.Total);
+        var dict = rows.GroupBy(s => s.StudentId).ToDictionary(g => g.Key, g => g.Sum(s => s.ModuleScore));
         return studentIds.OrderByDescending(id => dict.GetValueOrDefault(id)).ToList();
     }
 }
