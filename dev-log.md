@@ -88,3 +88,4 @@
 [2026-06-17 09:30:00] docs: update README with setup instructions
 [2026-06-17 11:55:00] fix: DatabaseSeeder - seed admin and test users
 [2026-06-17 14:40:00] frontend: role-based navigation in shell
+[2026-06-17 16:25:00] frontend: error handling - 401/403 redirects
