@@ -86,3 +86,4 @@
 [2026-06-16 15:20:00] frontend: environment.ts - prod API URL config
 [2026-06-16 17:00:00] frontend: loading spinner component
 [2026-06-17 09:30:00] docs: update README with setup instructions
+[2026-06-17 11:55:00] fix: DatabaseSeeder - seed admin and test users
