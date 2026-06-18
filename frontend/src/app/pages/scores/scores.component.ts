@@ -95,12 +95,11 @@ export class ScoresComponent implements OnInit {
   get isStaff() { return this.auth.isAssistant() || this.auth.isTeacher(); }
 
   ngOnInit() {
-    Promise.all([this.api.listCourses(), this.api.myActivities()])
-      .then(([courses, acts]) => {
-        const codes = new Set(acts.map(a => a.courseCode));
-        this.courseList = courses.filter(c => codes.has(c.code));
-      })
-      .catch(() => this.api.listCourses().then(c => this.courseList = c));
+    // Список курсов строим по факту записи (isEnrolled), а не по наличию незавершённых
+    // занятий — иначе после завершения занятия курс пропадал из раздела «Баллы».
+    this.api.listCourses()
+      .then(courses => { this.courseList = courses.filter(c => c.isEnrolled); })
+      .catch(() => { this.courseList = []; });
   }
 
   async selectCourse(id: string) {

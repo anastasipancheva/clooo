@@ -23,13 +23,15 @@ public sealed class TeachingController : ApiControllerBase
     private readonly ScoreHubDbContext _db;
     private readonly INotificationService _notifications;
     private readonly ICourseTemplateService _svc;
+    private readonly IScoringService _scoring;
 
-    public TeachingController(ITeachingSetupService teaching, ScoreHubDbContext db, INotificationService notifications, ICourseTemplateService svc)
+    public TeachingController(ITeachingSetupService teaching, ScoreHubDbContext db, INotificationService notifications, ICourseTemplateService svc, IScoringService scoring)
     {
         _teaching = teaching;
         _db = db;
         _notifications = notifications;
         _svc = svc;
+        _scoring = scoring;
     }
 
     private IActionResult FromOp<T>(OpResult<T> r) =>
@@ -314,6 +316,11 @@ public sealed class TeachingController : ApiControllerBase
         if (activity is null) return NotFound();
         activity.Status = ActivityStatus.Finished;
         await _db.SaveChangesAsync(ct);
+
+        // Сразу начисляем баллы за модуль (лекция/ДЗ), не дожидаясь финализации КТ.
+        try { await _scoring.RecomputeModuleScoresForActivity(activityId, ct); }
+        catch { /* пересчёт некритичен для ответа */ }
+
         return Ok();
     }
 

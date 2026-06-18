@@ -64,6 +64,36 @@ public sealed class ScoringService : IScoringService
         return OpResult<Unit>.Ok(Unit.Value);
     }
 
+    public async Task RecomputeModuleScoresForActivity(Guid activityId, CancellationToken ct = default)
+    {
+        var act = await _db.Activities
+            .AsNoTracking()
+            .Where(a => a.Id == activityId)
+            .Select(a => new { CourseId = a.Module.CourseId, ModuleNumber = a.Module.Number })
+            .FirstOrDefaultAsync(ct);
+        if (act is null) return;
+
+        var studentIds = await _db.CourseEnrollments
+            .Where(e => e.CourseId == act.CourseId)
+            .Join(_db.Users, e => e.UserId, u => u.Id, (e, u) => u)
+            .Where(u => u.Role == UserRole.Student)
+            .Select(u => u.Id)
+            .ToListAsync(ct);
+
+        foreach (var sid in studentIds)
+        {
+            // Сохраняем уже выставленный КТ-множитель; если КТ ещё не была — показываем баллы с ×1.0.
+            var existingMult = await _db.StudentActivityScores
+                .Where(s => s.CourseId == act.CourseId && s.StudentId == sid && s.ModuleNumber == act.ModuleNumber)
+                .Select(s => (decimal?)s.KtMultiplier)
+                .FirstOrDefaultAsync(ct);
+            var mult = existingMult is > 0 ? existingMult.Value : 1.0m;
+            await UpsertModuleScore(sid, act.CourseId, act.ModuleNumber, mult, ct);
+        }
+
+        await _db.SaveChangesAsync(ct);
+    }
+
     private async Task UpsertModuleScore(Guid studentId, Guid courseId, int moduleNumber, decimal ktMultiplier, CancellationToken ct)
     {
         var record = await _db.StudentActivityScores
