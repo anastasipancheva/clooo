@@ -588,8 +588,8 @@ function defaultAcademicYear() {
           @if (!scheduleLoading && scheduleActivities.length === 0) {
             <p class="text-sm text-[#9CA3AF]">Нет занятий. Добавьте их на вкладке Структура.</p>
           }
-          @for (a of scheduleActivities; track a.id) {
-            <div class="bg-white rounded-xl border border-[#E5E7EB] p-4">
+          @for (a of sortedScheduleActivities; track a.id) {
+            <div class="bg-white rounded-xl border border-[#E5E7EB] p-4" [class.opacity-60]="isActivityOver(a)">
               <div class="flex items-center justify-between gap-3 flex-wrap">
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-2 flex-wrap">
@@ -649,6 +649,18 @@ function defaultAcademicYear() {
                             [class]="app.status === 'Approved' ? 'bg-[#D1FAE5] text-[#059669]' : 'bg-[#FEE2E2] text-[#DC2626]'">
                             {{ app.status === 'Approved' ? 'Принят' : 'Отклонён' }}
                           </span>
+                          <!-- D5 — исправить миссклик: переключить решение -->
+                          @if (app.status === 'Approved') {
+                            <button (click)="reviewApplication(app.id, false)"
+                              class="h-7 px-2.5 rounded-lg border border-[#FCA5A5] text-[#DC2626] text-xs font-medium hover:bg-[#FEF2F2] transition-colors">
+                              Отклонить
+                            </button>
+                          } @else {
+                            <button (click)="reviewApplication(app.id, true)"
+                              class="h-7 px-2.5 rounded-lg border border-[#6EE7B7] text-[#059669] text-xs font-medium hover:bg-[#ECFDF5] transition-colors">
+                              Принять
+                            </button>
+                          }
                         }
                       </div>
                     </div>
@@ -676,7 +688,7 @@ function defaultAcademicYear() {
                   (ngModelChange)="onTeamsActivityChange($event)">
                   <option value="">— выберите занятие —</option>
                   @for (a of teamActivities; track a.id) {
-                    <option [value]="a.id">М{{ a.moduleNumber }} / {{ a.typeLabel }} / {{ a.title }}</option>
+                    <option [value]="a.id">М{{ a.moduleNumber }} / {{ a.title }}{{ isActivityOver(a) ? ' (завершено)' : '' }}</option>
                   }
                 </select>
               </div>
@@ -1123,10 +1135,24 @@ export class AdminComponent implements OnInit {
   get courseStudentsOnly() { return this.courseStudents.filter(u => u.role === 'Student'); }
   get courseAssistants() { return this.courseStudents.filter(u => u.role === 'Assistant'); }
   get lectureActivities() { return this.scheduleActivities.filter(a => a.typeLabel === 'Лекция'); }
-  // Команды формируются только для лекций, ещё не прошедших.
+  // Завершённым считаем со статусом Finished или с прошедшей датой.
+  isActivityOver(a: TeacherActivity) { return a.status === 'Finished' || new Date(a.endsAt).getTime() < Date.now(); }
+  // Расписание: активные/будущие сверху, завершённые — вниз (#3).
+  get sortedScheduleActivities() {
+    return [...this.scheduleActivities].sort((a, b) => {
+      const oa = this.isActivityOver(a) ? 1 : 0, ob = this.isActivityOver(b) ? 1 : 0;
+      return oa - ob || new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime();
+    });
+  }
+  // Команды формируются для лекций. Завершённые показываем, но опускаем вниз (#3) —
+  // их можно открыть для просмотра, генерация/правка заблокированы на бэкенде.
   get teamActivities() {
-    const now = Date.now();
-    return this.scheduleActivities.filter(a => a.typeLabel === 'Лекция' && new Date(a.endsAt).getTime() > now);
+    return this.scheduleActivities
+      .filter(a => a.typeLabel === 'Лекция')
+      .sort((a, b) => {
+        const oa = this.isActivityOver(a) ? 1 : 0, ob = this.isActivityOver(b) ? 1 : 0;
+        return oa - ob || new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime();
+      });
   }
 
   ngOnInit() { this.loadCourses(); }

@@ -220,7 +220,8 @@ public sealed class GroupActivityService : IGroupActivityService
             .Where(h => h.Status == TeamHelpRequestStatus.Open)
             .Where(h => h.Team.ActivityId == activityId);
 
-        if (actor.Role is not (UserRole.Teacher or UserRole.Admin))
+        // Вызовы ассистента: админ видит все, остальные (включая преподавателя) — только свои команды.
+        if (actor.Role != UserRole.Admin)
         {
             var myTeamIds = await _db.Teams
                 .Where(t => t.ActivityId == activityId)
@@ -267,8 +268,9 @@ public sealed class GroupActivityService : IGroupActivityService
         if (actor is null || !CanAssist(actor.Role))
             return OpResult<IReadOnlyList<TeamSubmissionRow>>.Fail("Недостаточно прав.");
 
+        // Очередь сдач: админ видит все команды, остальные (включая преподавателя) — только закреплённые.
         List<Guid> myTeams;
-        if (actor.Role is UserRole.Teacher or UserRole.Admin)
+        if (actor.Role == UserRole.Admin)
         {
             myTeams = await _db.Teams.Where(t => t.ActivityId == activityId).Select(t => t.Id).ToListAsync(ct);
         }
@@ -391,12 +393,13 @@ public sealed class GroupActivityService : IGroupActivityService
         if (sub.Status is not (SubmissionStatus.ReadyForReview or SubmissionStatus.InReview))
             return OpResult<Unit>.Fail("Сдача не ожидает приёма.");
 
-        var isElevated = actor.Role is UserRole.Teacher or UserRole.Admin;
+        // Принять/отклонить может только закреплённый ассистент команды (или админ).
+        var isAdmin = actor.Role == UserRole.Admin;
         var isAssigned = await _db.TeamAssistants.AnyAsync(x => x.TeamId == sub.TeamId && x.AssistantId == actorId, ct);
-        if (!isElevated && !isAssigned && sub.ReviewerId != actorId)
+        if (!isAdmin && !isAssigned)
             return OpResult<Unit>.Fail("Вы не закреплены за этой командой.");
 
-        if (!IsLive(sub.Activity) && !isElevated)
+        if (!IsLive(sub.Activity) && !isAdmin)
             return OpResult<Unit>.Fail("Занятие не запущено преподавателем.");
 
         sub.Status = accepted ? SubmissionStatus.Accepted : SubmissionStatus.Rejected;

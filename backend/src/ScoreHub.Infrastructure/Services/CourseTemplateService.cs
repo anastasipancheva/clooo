@@ -37,7 +37,7 @@ public sealed class CourseTemplateService(ScoreHubDbContext db) : ICourseTemplat
         return new TemplateView(t.Id, t.Title, t.Description, t.CreatedAt,
             t.Modules.OrderBy(m => m.Number).Select(m =>
                 new TemplateModuleView(m.Id, m.Number, m.Title,
-                    m.Activities.Select(a =>
+                    m.Activities.OrderBy(a => a.SortOrder).Select(a =>
                         new TemplateActivityView(a.Id, a.Type, a.Title, a.TaskFileUrl, a.TheoryTestUrl,
                             a.Tasks.Select(tk => new TemplateTaskView(tk.Id, tk.Code, tk.Title, tk.Points)).ToList())
                     ).ToList(),
@@ -61,13 +61,14 @@ public sealed class CourseTemplateService(ScoreHubDbContext db) : ICourseTemplat
                 Title = m.Title,
                 StartsAt = m.StartsAt,
                 EndsAt = m.EndsAt,
-                Activities = m.Activities.Select(a => new ActivityTemplate
+                Activities = m.Activities.Select((a, ai) => new ActivityTemplate
                 {
                     Id = Guid.NewGuid(),
                     Type = a.Type,
                     Title = a.Title,
                     TaskFileUrl = a.TaskFileUrl,
                     TheoryTestUrl = a.TheoryTestUrl,
+                    SortOrder = ai,
                     Tasks = a.Tasks.Select(tk => new TaskTemplate
                     {
                         Id = Guid.NewGuid(),
@@ -157,7 +158,7 @@ public sealed class CourseTemplateService(ScoreHubDbContext db) : ICourseTemplat
                 EndsAt = moduleEnd
             };
 
-            var actList = mt.Activities.ToList();
+            var actList = mt.Activities.OrderBy(a => a.SortOrder).ToList();
             var moduleSpan = moduleEnd - moduleStart;
             for (int ai = 0; ai < actList.Count; ai++)
             {

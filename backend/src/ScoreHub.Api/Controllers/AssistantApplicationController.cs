@@ -111,22 +111,17 @@ public sealed class AssistantApplicationController : ApiControllerBase
         if (status is Domain.Enums.ActivityStatus.Active or Domain.Enums.ActivityStatus.Finished)
             return BadRequest(new { error = "Занятие уже идёт или завершено — отменить нельзя." });
 
-        // Снимаем заявку и связанные назначения (ассистент занятия + закрепления за командами).
+        // Снимаем заявку и ассистента занятия, затем перераспределяем команды между оставшимися.
         _db.AssistantApplications.Remove(app);
+        await _db.SaveChangesAsync(ct);
         await _db.ActivityAssistants
             .Where(aa => aa.ActivityId == activityId && aa.AssistantId == uid.Value)
             .ExecuteDeleteAsync(ct);
-        var teamIds = await _db.Teams.Where(t => t.ActivityId == activityId).Select(t => t.Id).ToListAsync(ct);
-        if (teamIds.Count > 0)
-            await _db.TeamAssistants
-                .Where(ta => teamIds.Contains(ta.TeamId) && ta.AssistantId == uid.Value)
-                .ExecuteDeleteAsync(ct);
-
-        await _db.SaveChangesAsync(ct);
+        await RebalanceTeamAssistantsAsync(activityId, ct);
         return Ok();
     }
 
-    /// <summary>Закрепляет ассистента за занятием и за командами без ассистента (для авто-назначения).</summary>
+    /// <summary>Добавляет ассистента к занятию и пропорционально перераспределяет команды между всеми ассистентами.</summary>
     private async Task EnsureAssistantAssignedAsync(Guid activityId, Guid assistantId, CancellationToken ct)
     {
         var alreadyActive = await _db.ActivityAssistants
@@ -134,12 +129,35 @@ public sealed class AssistantApplicationController : ApiControllerBase
         if (!alreadyActive)
             _db.ActivityAssistants.Add(new ActivityAssistant { ActivityId = activityId, AssistantId = assistantId });
 
-        var teamsWithoutAssistant = await _db.Teams
-            .Include(t => t.Assistants)
-            .Where(t => t.ActivityId == activityId && !t.Assistants.Any())
+        await _db.SaveChangesAsync(ct);
+        await RebalanceTeamAssistantsAsync(activityId, ct);
+    }
+
+    /// <summary>D4 — равномерно (round-robin) распределяет команды занятия между всеми его ассистентами.</summary>
+    private async Task RebalanceTeamAssistantsAsync(Guid activityId, CancellationToken ct)
+    {
+        var assistantIds = await _db.ActivityAssistants
+            .Where(aa => aa.ActivityId == activityId)
+            .Select(aa => aa.AssistantId)
             .ToListAsync(ct);
-        foreach (var team in teamsWithoutAssistant)
-            team.Assistants.Add(new TeamAssistant { AssistantId = assistantId });
+
+        var teamIds = await _db.Teams
+            .Where(t => t.ActivityId == activityId)
+            .OrderBy(t => t.Name)
+            .Select(t => t.Id)
+            .ToListAsync(ct);
+
+        if (teamIds.Count == 0) return;
+
+        // Полностью пересобираем закрепления команд занятия.
+        await _db.TeamAssistants.Where(ta => teamIds.Contains(ta.TeamId)).ExecuteDeleteAsync(ct);
+
+        if (assistantIds.Count == 0) return;
+
+        for (int i = 0; i < teamIds.Count; i++)
+            _db.TeamAssistants.Add(new TeamAssistant { TeamId = teamIds[i], AssistantId = assistantIds[i % assistantIds.Count] });
+
+        await _db.SaveChangesAsync(ct);
     }
 
     /// <summary>Преподаватель одобряет или отклоняет заявку.</summary>
@@ -151,6 +169,8 @@ public sealed class AssistantApplicationController : ApiControllerBase
             .FirstOrDefaultAsync(a => a.Id == appId && a.ActivityId == activityId, ct);
         if (app is null) return NotFound();
 
+        // D5 — решение обратимо (на случай миссклика): можно повторно одобрить ранее отклонённую
+        // или, наоборот, отозвать одобрение.
         app.Status = dto.Approved ? "Approved" : "Rejected";
         app.ReviewedAt = DateTimeOffset.UtcNow;
 
@@ -160,20 +180,19 @@ public sealed class AssistantApplicationController : ApiControllerBase
                 .AnyAsync(aa => aa.ActivityId == activityId && aa.AssistantId == app.AssistantId, ct);
             if (!alreadyActive)
                 _db.ActivityAssistants.Add(new ActivityAssistant { ActivityId = activityId, AssistantId = app.AssistantId });
-
-            // Auto-assign assistant to teams that have no assistant yet (1 assistant per team)
-            var teamsWithoutAssistant = await _db.Teams
-                .Include(t => t.Assistants)
-                .Where(t => t.ActivityId == activityId && !t.Assistants.Any())
-                .ToListAsync(ct);
-
-            foreach (var team in teamsWithoutAssistant)
-            {
-                team.Assistants.Add(new Domain.Entities.TeamAssistant { AssistantId = app.AssistantId });
-            }
+            await _db.SaveChangesAsync(ct);
+        }
+        else
+        {
+            // Снимаем ассистента с занятия (и его командные закрепления — через ребаланс ниже).
+            await _db.SaveChangesAsync(ct);
+            await _db.ActivityAssistants
+                .Where(aa => aa.ActivityId == activityId && aa.AssistantId == app.AssistantId)
+                .ExecuteDeleteAsync(ct);
         }
 
-        await _db.SaveChangesAsync(ct);
+        // D4 — пропорционально перераспределяем команды между актуальным составом ассистентов.
+        await RebalanceTeamAssistantsAsync(activityId, ct);
         return Ok();
     }
 

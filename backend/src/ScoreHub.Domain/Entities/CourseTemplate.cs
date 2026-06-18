@@ -27,10 +27,13 @@ public sealed class ActivityTemplate
 {
     public Guid Id { get; set; }
     public Guid ModuleTemplateId { get; set; }
-    public int Type { get; set; }   // 0=Lecture, 1=Practice, 2=KT, 3=Homework
+    public int Type { get; set; }   // 1=Lecture, 2=ControlPoint, 3=HomeworkSession
     public string Title { get; set; } = "";
     public string? TaskFileUrl { get; set; }
     public string? TheoryTestUrl { get; set; }
+
+    /// <summary>Порядок занятия внутри модуля (как задал преподаватель). Сохраняет очерёдность.</summary>
+    public int SortOrder { get; set; }
 
     public ModuleTemplate ModuleTemplate { get; set; } = null!;
     public ICollection<TaskTemplate> Tasks { get; set; } = new List<TaskTemplate>();

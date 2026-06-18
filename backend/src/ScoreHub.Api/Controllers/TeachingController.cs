@@ -544,7 +544,7 @@ public sealed class TeachingController : ApiControllerBase
             course.Modules.OrderBy(m => m.Number).Select(m => new TemplateModuleDto(
                 m.Number,
                 m.Title,
-                m.Activities.Select(a => new TemplateActivityDto(
+                m.Activities.OrderBy(a => a.StartsAt).Select(a => new TemplateActivityDto(
                     (int)a.Type,
                     a.Title,
                     a.TaskFileUrl,
@@ -652,6 +652,18 @@ public sealed class TeachingController : ApiControllerBase
         }
 
         await _db.SaveChangesAsync(ct);
+
+        // D4 — если ассистенты уже одобрены, распределяем их по новым командам пропорционально (round-robin).
+        var assistantIds = await _db.ActivityAssistants
+            .Where(aa => aa.ActivityId == activityId)
+            .Select(aa => aa.AssistantId)
+            .ToListAsync(ct);
+        if (assistantIds.Count > 0)
+        {
+            for (int i = 0; i < teams.Length; i++)
+                _db.TeamAssistants.Add(new TeamAssistant { TeamId = teams[i].Id, AssistantId = assistantIds[i % assistantIds.Count] });
+            await _db.SaveChangesAsync(ct);
+        }
 
         // Return teams with member names
         var result = teams.Select(t => new

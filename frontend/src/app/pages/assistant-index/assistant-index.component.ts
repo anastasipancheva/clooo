@@ -356,26 +356,20 @@ export class AssistantIndexComponent implements OnInit {
       const approvedActivityIds = this.approvedActivityIds;
 
       for (const a of acts) {
-        if (approvedActivityIds.has(a.id)) {
-          this.appStates[a.id] = { message: '', submitting: false, done: true, status: 'approved' };
-        } else {
-          // Try to find pending/rejected application
-          this.appStates[a.id] = { message: '', submitting: false, done: false, status: 'none' };
-        }
+        this.appStates[a.id] = { message: '', submitting: false, done: false, status: 'none' };
       }
 
-      // Load pending applications from backend for each activity
-      await Promise.allSettled(acts.map(a =>
-        this.api.listApplications(a.id).then(apps => {
-          const myId = this.auth.user()?.id;
-          const mine = apps.find(app => app.assistantId === myId);
-          if (mine) {
-            const status: AppStatus = mine.status === 'Approved' ? 'approved'
-              : mine.status === 'Rejected' ? 'rejected' : 'pending';
-            this.appStates[a.id] = { message: '', submitting: false, done: true, status };
-          }
-        }).catch(() => {})
-      ));
+      // D6 — статус собственных заявок берём из myApplications (ассистент не имеет доступа
+      // к teacher-only списку заявок), иначе отклонённые/ожидающие висели бы как «доступные».
+      try {
+        const myApps = await this.api.myApplications();
+        for (const ma of myApps) {
+          if (!this.appStates[ma.activityId]) continue;
+          const status: AppStatus = ma.status === 'Approved' ? 'approved'
+            : ma.status === 'Rejected' ? 'rejected' : 'pending';
+          this.appStates[ma.activityId] = { message: '', submitting: false, done: true, status };
+        }
+      } catch { /* ignore */ }
 
     } catch { /* ignore */ }
     finally { this.loading = false; }
