@@ -145,17 +145,20 @@ public sealed class ScoringService : IScoringService
             // Отсутствующим на паре баллы за лекцию не начисляются.
             if (member.IsAbsent) continue;
 
-            // За каждую принятую задачу команды: защитник получает свой коэффициент (1.0–1.2),
-            // остальные присутствующие — ровно по 1 баллу.
+            // За каждую принятую задачу: базовые баллы = вес задачи (TaskItem.Points).
+            // Защитник получает вес × коэффициент (1.0–1.2), остальные присутствующие — вес задачи.
             var acceptedSubs = await _db.TaskSubmissions
                 .AsNoTracking()
                 .Where(s => s.ActivityId == actId && s.TeamId == member.TeamId && s.Status == SubmissionStatus.Accepted)
-                .Select(s => new { s.DefenderUserId, s.DefenderCoefficient })
+                .Select(s => new { s.DefenderUserId, s.DefenderCoefficient, Points = s.TaskItem.Points })
                 .ToListAsync(ct);
 
             decimal lectureScore = 0;
             foreach (var s in acceptedSubs)
-                lectureScore += (s.DefenderUserId == studentId) ? (s.DefenderCoefficient ?? 1.0m) : 1.0m;
+            {
+                var basePoints = s.Points > 0 ? s.Points : 1.0m;
+                lectureScore += (s.DefenderUserId == studentId) ? basePoints * (s.DefenderCoefficient ?? 1.0m) : basePoints;
+            }
 
             // Add mini-test bonus (SQLite не умеет SUM по decimal — суммируем в памяти).
             var bonuses = await _db.MiniTestAnswers
@@ -200,6 +203,12 @@ public sealed class ScoringService : IScoringService
     public async Task<OpResult<StudentScoreDto>> GetStudentScore(
         Guid actorId, Guid courseId, Guid studentId, CancellationToken ct = default)
     {
+        var actor = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == actorId, ct);
+        if (actor is null) return OpResult<StudentScoreDto>.Fail("Пользователь не найден.");
+        // Студент может смотреть только свои баллы; персонал (ассистент/препод/админ) — любые.
+        if (!CanAssist(actor.Role) && actorId != studentId)
+            return OpResult<StudentScoreDto>.Fail("Нет доступа к баллам другого студента.");
+
         var student = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == studentId, ct);
         if (student is null) return OpResult<StudentScoreDto>.Fail("Студент не найден.");
 

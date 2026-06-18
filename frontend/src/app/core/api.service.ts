@@ -36,6 +36,7 @@ export class ApiService {
   // Courses
   listCourses() { return this.get<Course[]>('/api/courses'); }
   courseScores(courseId: string) { return this.get<StudentScore[]>(`/api/courses/${courseId}/scores`); }
+  studentScore(courseId: string, studentId: string) { return this.get<StudentScore>(`/api/courses/${courseId}/students/${studentId}/score`); }
   courseStudents(courseId: string) {
     return this.get<{ id: string; email: string; displayName: string; role: string; enrolledAt: string }[]>
       (`/api/courses/${courseId}/students`);
@@ -165,9 +166,11 @@ export class ApiService {
   patchActivity(activityId: string, body: { title?: string; startsAt?: string; endsAt?: string }) {
     return this.patch<void>(`/api/teaching/activities/${activityId}`, body);
   }
-  patchMaterials(activityId: string, body: { preLectureVideoUrl?: string; theoryTestUrl?: string; taskFileUrl?: string; taskCount?: number }) {
+  patchMaterials(activityId: string, body: { preLectureVideoUrl?: string; theoryTestUrl?: string; taskFileUrl?: string; taskCount?: number; taskPoints?: number[] }) {
     return this.patch<void>(`/api/teaching/activities/${activityId}/materials`, body);
   }
+  getTaskPoints(activityId: string) { return this.get<number[]>(`/api/teaching/activities/${activityId}/task-points`); }
+  deleteActivity(activityId: string) { return this.delete<void>(`/api/teaching/activities/${activityId}`); }
   startActivity(activityId: string) {
     return this.post<{ theoryTestUrl?: string | null }>(`/api/teaching/activities/${activityId}/start`);
   }

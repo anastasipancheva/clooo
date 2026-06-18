@@ -199,10 +199,11 @@ export class DashboardComponent implements OnInit {
     if (acts.status === 'fulfilled') this.activities = acts.value;
     if (courses.status === 'fulfilled') {
       this.courseList = courses.value;
-      // load scores for enrolled courses only
-      if (!this.auth.isAssistant()) {
+      // load own scores for enrolled courses (студент тянет персональный эндпоинт)
+      const myId = this.auth.user()?.id;
+      if (!this.auth.isAssistant() && myId) {
         for (const c of courses.value.filter(c => c.isEnrolled)) {
-          this.api.courseScores(c.id).then(s => this.allScores.set(c.id, s)).catch(() => {});
+          this.api.studentScore(c.id, myId).then(s => this.allScores.set(c.id, [s])).catch(() => {});
         }
       }
     }

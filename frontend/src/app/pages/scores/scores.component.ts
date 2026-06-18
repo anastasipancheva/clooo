@@ -107,12 +107,14 @@ export class ScoresComponent implements OnInit {
     this.score.set(null);
     this.allScores.set([]);
     if (this.selected()) {
-      const all = await this.api.courseScores(id).catch(() => [] as StudentScore[]);
       if (this.isStaff) {
+        const all = await this.api.courseScores(id).catch(() => [] as StudentScore[]);
         this.allScores.set(all);
       } else {
         const userId = this.auth.user()?.id;
-        this.score.set(all.find(s => s.studentId === userId) ?? null);
+        // Студент тянет свои баллы через персональный эндпоинт (courseScores доступен только персоналу).
+        const mine = userId ? await this.api.studentScore(id, userId).catch(() => null) : null;
+        this.score.set(mine ?? null);
       }
     }
   }

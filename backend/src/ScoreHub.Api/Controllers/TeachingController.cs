@@ -583,6 +583,91 @@ public sealed class TeachingController : ApiControllerBase
             if (dto.TaskCount.Value < 0) return BadRequest(new { error = "Количество задач не может быть отрицательным." });
             activity.TaskCount = dto.TaskCount.Value;
         }
+
+        // Пункт 5 — баллы за каждую задачу (по умолчанию 1). Синхронизируем служебный набор «Задачи».
+        if (dto.TaskPoints is { } pts)
+        {
+            if (pts.Any(p => p < 0)) return BadRequest(new { error = "Баллы за задачу не могут быть отрицательными." });
+            activity.TaskCount = pts.Count;
+
+            var taskSet = await _db.TaskSets.Include(ts => ts.Tasks)
+                .FirstOrDefaultAsync(ts => ts.ActivityId == activityId && ts.Title == "Задачи", ct);
+            if (taskSet is null)
+            {
+                taskSet = new TaskSet { Id = Guid.NewGuid(), ActivityId = activityId, Title = "Задачи", Published = true };
+                _db.TaskSets.Add(taskSet);
+            }
+            for (int i = 0; i < pts.Count; i++)
+            {
+                var code = (i + 1).ToString();
+                var item = taskSet.Tasks.FirstOrDefault(t => t.Code == code);
+                if (item is null)
+                    taskSet.Tasks.Add(new TaskItem { Id = Guid.NewGuid(), TaskSetId = taskSet.Id, Code = code, Title = $"Задача {i + 1}", Points = pts[i] });
+                else
+                    item.Points = pts[i];
+            }
+            // лишние задачи (если уменьшили количество) удаляем
+            foreach (var extra in taskSet.Tasks.Where(t => int.TryParse(t.Code, out var n) && n > pts.Count).ToList())
+                _db.TaskItems.Remove(extra);
+        }
+
+        await _db.SaveChangesAsync(ct);
+        return Ok();
+    }
+
+    /// <summary>Баллы за задачи занятия по их номеру (1..N). Пусто/1 по умолчанию.</summary>
+    [HttpGet("activities/{activityId:guid}/task-points")]
+    public async Task<IActionResult> GetTaskPoints(Guid activityId, CancellationToken ct)
+    {
+        var items = await _db.TaskItems
+            .AsNoTracking()
+            .Where(t => t.TaskSet.ActivityId == activityId && t.TaskSet.Title == "Задачи")
+            .Select(t => new { t.Code, t.Points })
+            .ToListAsync(ct);
+
+        var points = items
+            .Select(t => new { N = int.TryParse(t.Code, out var n) ? n : 0, t.Points })
+            .Where(x => x.N > 0)
+            .OrderBy(x => x.N)
+            .Select(x => x.Points)
+            .ToList();
+
+        return Ok(points);
+    }
+
+    /// <summary>Удалить занятие со всеми зависимыми данными (пункт 4).</summary>
+    [HttpDelete("activities/{activityId:guid}")]
+    public async Task<IActionResult> DeleteActivity(Guid activityId, CancellationToken ct)
+    {
+        var activity = await _db.Activities.FirstOrDefaultAsync(a => a.Id == activityId, ct);
+        if (activity is null) return NotFound();
+
+        var taskSetIds = await _db.TaskSets.Where(ts => ts.ActivityId == activityId).Select(ts => ts.Id).ToListAsync(ct);
+        if (taskSetIds.Count > 0)
+        {
+            var taskItemIds = await _db.TaskItems.Where(t => taskSetIds.Contains(t.TaskSetId)).Select(t => t.Id).ToListAsync(ct);
+            if (taskItemIds.Count > 0)
+                await _db.TaskAssistants.Where(t => taskItemIds.Contains(t.TaskItemId)).ExecuteDeleteAsync(ct);
+            await _db.TaskItems.Where(t => taskSetIds.Contains(t.TaskSetId)).ExecuteDeleteAsync(ct);
+            await _db.TaskSets.Where(ts => taskSetIds.Contains(ts.Id)).ExecuteDeleteAsync(ct);
+        }
+
+        var teamIds = await _db.Teams.Where(t => t.ActivityId == activityId).Select(t => t.Id).ToListAsync(ct);
+        if (teamIds.Count > 0)
+        {
+            await _db.TeamHelpRequests.Where(h => teamIds.Contains(h.TeamId)).ExecuteDeleteAsync(ct);
+            await _db.TeamMembers.Where(m => teamIds.Contains(m.TeamId)).ExecuteDeleteAsync(ct);
+            await _db.TeamAssistants.Where(a => teamIds.Contains(a.TeamId)).ExecuteDeleteAsync(ct);
+            await _db.Teams.Where(t => teamIds.Contains(t.Id)).ExecuteDeleteAsync(ct);
+        }
+
+        await _db.TaskSubmissions.Where(s => s.ActivityId == activityId).ExecuteDeleteAsync(ct);
+        await _db.MiniTestAnswers.Where(a => a.ActivityId == activityId).ExecuteDeleteAsync(ct);
+        await _db.MiniTestQuestions.Where(q => q.ActivityId == activityId).ExecuteDeleteAsync(ct);
+        await _db.ActivityAssistants.Where(a => a.ActivityId == activityId).ExecuteDeleteAsync(ct);
+        await _db.AssistantApplications.Where(a => a.ActivityId == activityId).ExecuteDeleteAsync(ct);
+
+        _db.Activities.Remove(activity);
         await _db.SaveChangesAsync(ct);
         return Ok();
     }
@@ -742,5 +827,5 @@ public sealed class TeachingController : ApiControllerBase
     public sealed record IdListDto(IReadOnlyList<Guid> Ids);
     public sealed record CreateTeamDto(string Name);
     public sealed record AutoGenerateDto(int TeamSize);
-    public sealed record PatchMaterialsDto(string? PreLectureVideoUrl, string? TheoryTestUrl, string? TaskFileUrl, int? TaskCount);
+    public sealed record PatchMaterialsDto(string? PreLectureVideoUrl, string? TheoryTestUrl, string? TaskFileUrl, int? TaskCount, List<decimal>? TaskPoints);
 }

@@ -254,10 +254,16 @@ function defaultAcademicYear() {
                                     {{ a.startsAt | date:'d MMM HH:mm' }} — {{ a.endsAt | date:'HH:mm' }}
                                   </span>
                                 </div>
-                                <button (click)="startEditActivity(a)"
-                                  class="flex-shrink-0 h-6 px-2 rounded-md text-xs text-[#9CA3AF] hover:text-[#005BFF] hover:bg-[#EAF2FF] transition-colors">
-                                  ✏️
-                                </button>
+                                <div class="flex items-center gap-1 flex-shrink-0">
+                                  <button (click)="startEditActivity(a)"
+                                    class="h-6 px-2 rounded-md text-xs text-[#9CA3AF] hover:text-[#005BFF] hover:bg-[#EAF2FF] transition-colors">
+                                    ✏️
+                                  </button>
+                                  <button (click)="openDeleteActivity(a.id, a.title)"
+                                    class="h-6 px-2 rounded-md text-xs text-[#9CA3AF] hover:text-[#EF4444] hover:bg-red-50 transition-colors" title="Удалить занятие">
+                                    🗑
+                                  </button>
+                                </div>
                               </div>
                             } @else {
                               <!-- Inline editor for activity dates -->
@@ -362,11 +368,28 @@ function defaultAcademicYear() {
                     [(ngModel)]="matFileUrl" />
                 </div>
                 @if (matHwModuleIds.length === 0 && matActivity.typeLabel !== 'КТ') {
-                  <div>
-                    <label class="block text-xs text-[#6B7280] mb-1">🔢 Количество задач</label>
-                    <input type="number" min="0" [class]="INPUT + ' w-32'" placeholder="напр. 6"
-                      [(ngModel)]="matTaskCount" />
-                    <p class="text-[10px] text-[#9CA3AF] mt-1">Студенты отмечают задачу готовой по номеру (1…N).</p>
+                  <div class="space-y-3">
+                    <div>
+                      <label class="block text-xs text-[#6B7280] mb-1">🔢 Количество задач</label>
+                      <input type="number" min="0" [class]="INPUT + ' w-32'" placeholder="напр. 6"
+                        [(ngModel)]="matTaskCount" (ngModelChange)="syncTaskPoints()" />
+                      <p class="text-[10px] text-[#9CA3AF] mt-1">Студенты отмечают задачу готовой по номеру (1…N).</p>
+                    </div>
+                    @if (matTaskPoints.length > 0) {
+                      <div>
+                        <label class="block text-xs text-[#6B7280] mb-1">🎯 Баллы за каждую задачу</label>
+                        <div class="flex flex-wrap gap-2">
+                          @for (p of matTaskPoints; track $index) {
+                            <div class="flex items-center gap-1">
+                              <span class="text-xs text-[#9CA3AF]">№{{ $index + 1 }}</span>
+                              <input type="number" min="0" step="0.5" [class]="INPUT + ' w-16 h-8 text-xs'"
+                                [(ngModel)]="matTaskPoints[$index]" />
+                            </div>
+                          }
+                        </div>
+                        <p class="text-[10px] text-[#9CA3AF] mt-1">По умолчанию каждая задача — 1 балл.</p>
+                      </div>
+                    }
                   </div>
                 }
                 <button (click)="saveMaterials()" [disabled]="matSaving" [class]="BTN_PRIMARY">
@@ -935,6 +958,26 @@ function defaultAcademicYear() {
             </div>
           }
 
+          <!-- Delete activity confirmation (item 4) -->
+          @if (deleteActivityModal) {
+            <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" (click)="deleteActivityModal = false">
+              <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl space-y-4" (click)="$event.stopPropagation()">
+                <p class="font-semibold text-[#1A1A1B]">🗑 Удалить занятие</p>
+                <p class="text-sm text-[#6B7280]">
+                  Занятие <strong>{{ deleteActivityTitle }}</strong> будет удалено вместе с задачами,
+                  командами и сдачами. Это действие необратимо.
+                </p>
+                <div class="flex gap-2 pt-1">
+                  <button (click)="deleteActivityModal = false" [class]="BTN_GHOST + ' flex-1'">Отмена</button>
+                  <button (click)="confirmDeleteActivity()"
+                    class="flex-1 h-9 rounded-lg bg-[#DC2626] text-white text-sm font-medium hover:bg-[#B91C1C] transition-colors">
+                    Удалить занятие
+                  </button>
+                </div>
+              </div>
+            </div>
+          }
+
           <!-- Invite link modal -->
           @if (inviteModal) {
             <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" (click)="inviteModal = false">
@@ -1052,6 +1095,7 @@ export class AdminComponent implements OnInit {
   // Materials tab
   matActivity: TeacherActivity | null = null;
   matVideoUrl = ''; matTestUrl = ''; matFileUrl = ''; matTaskCount = '';
+  matTaskPoints: number[] = [];
   matSaving = false;
   matHwModuleIds: string[] = [];
   nonHwActivities: TeacherActivity[] = [];
@@ -1061,6 +1105,11 @@ export class AdminComponent implements OnInit {
   deleteCourseModal = false;
   deleteCourseId = '';
   deleteCourseCode = '';
+
+  // Delete-activity modal (item 4)
+  deleteActivityModal = false;
+  deleteActivityId = '';
+  deleteActivityTitle = '';
 
   // Students tab
   studentsSubTab: StudentsSubTab = 'students';
@@ -1236,6 +1285,21 @@ export class AdminComponent implements OnInit {
     } catch (e: unknown) { this.toast.error(e instanceof Error ? e.message : 'Ошибка'); }
   }
 
+  openDeleteActivity(id: string, title: string) {
+    this.deleteActivityId = id;
+    this.deleteActivityTitle = title;
+    this.deleteActivityModal = true;
+  }
+
+  async confirmDeleteActivity() {
+    try {
+      await this.api.deleteActivity(this.deleteActivityId);
+      this.toast.success('Занятие удалено');
+      this.deleteActivityModal = false;
+      await this.loadStructure();
+    } catch (e: unknown) { this.toast.error(e instanceof Error ? e.message : 'Ошибка'); }
+  }
+
   async addModule() {
     if (!this.selected || !this.moduleTitle || !this.moduleStart || !this.moduleEnd) {
       this.toast.error('Заполните все поля модуля'); return;
@@ -1303,7 +1367,22 @@ export class AdminComponent implements OnInit {
     this.matTestUrl = act.theoryTestUrl ?? '';
     this.matFileUrl = act.taskFileUrl ?? '';
     this.matTaskCount = act.taskCount ? String(act.taskCount) : '';
+    this.matTaskPoints = [];
     this.matHwModuleIds = [];
+    // Подгружаем баллы за задачи (если заданы); иначе заполняем единицами по количеству.
+    this.api.getTaskPoints(act.id).then(pts => {
+      if (pts && pts.length > 0) { this.matTaskPoints = pts.map(Number); this.matTaskCount = String(pts.length); }
+      else { this.syncTaskPoints(); }
+    }).catch(() => this.syncTaskPoints());
+  }
+
+  // Подгоняет длину массива баллов под «количество задач» (новые — по 1 баллу).
+  syncTaskPoints() {
+    const n = Math.max(0, parseInt(this.matTaskCount) || 0);
+    const next = [...this.matTaskPoints];
+    next.length = n;
+    for (let i = 0; i < n; i++) if (next[i] === undefined || next[i] === null) next[i] = 1;
+    this.matTaskPoints = next;
   }
 
   selectHwModule(activities: TeacherActivity[]) {
@@ -1326,6 +1405,7 @@ export class AdminComponent implements OnInit {
           theoryTestUrl: this.matTestUrl,
           taskFileUrl: this.matFileUrl,
           taskCount: this.matTaskCount === '' ? undefined : Math.max(0, parseInt(this.matTaskCount) || 0),
+          taskPoints: this.matTaskPoints.length > 0 ? this.matTaskPoints.map(p => Math.max(0, Number(p) || 0)) : undefined,
         });
       }
       this.toast.success('Материалы сохранены');
