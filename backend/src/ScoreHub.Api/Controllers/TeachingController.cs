@@ -815,6 +815,37 @@ public sealed class TeachingController : ApiControllerBase
         return Ok();
     }
 
+    /// <summary>Таблица перевода БСК → оценка (границы баллов).</summary>
+    [HttpGet("courses/{courseId:guid}/grading")]
+    public async Task<IActionResult> GetGrading(Guid courseId, CancellationToken ct)
+    {
+        var json = await _db.Courses.Where(c => c.Id == courseId).Select(c => c.FinalGradingTableJson).FirstOrDefaultAsync(ct);
+        if (json is null) return NotFound();
+        var table = System.Text.Json.JsonSerializer.Deserialize<List<GradeRowDto>>(json) ?? new();
+        return Ok(table.OrderByDescending(t => t.min));
+    }
+
+    /// <summary>Изменить границы баллов для оценок (5+/5/…/2-).</summary>
+    [HttpPut("courses/{courseId:guid}/grading")]
+    public async Task<IActionResult> SetGrading(Guid courseId, [FromBody] GradingDto dto, CancellationToken ct)
+    {
+        var course = await _db.Courses.FirstOrDefaultAsync(c => c.Id == courseId, ct);
+        if (course is null) return NotFound();
+        if (dto.Table is null || dto.Table.Count == 0) return BadRequest(new { error = "Таблица оценок пуста." });
+
+        var clean = dto.Table
+            .Where(r => !string.IsNullOrWhiteSpace(r.mark))
+            .OrderByDescending(r => r.min)
+            .Select(r => new GradeRowDto(r.min, r.mark.Trim()))
+            .ToList();
+        course.FinalGradingTableJson = System.Text.Json.JsonSerializer.Serialize(clean);
+        await _db.SaveChangesAsync(ct);
+        return Ok();
+    }
+
+    public sealed record GradeRowDto(decimal min, string mark);
+    public sealed record GradingDto(List<GradeRowDto> Table);
+
     public sealed record CreateCourseDto(string Code, string Title, string AcademicYear);
     public sealed record EnrollBulkDto(List<string> Emails);
     public sealed record AddModuleDto(int Number, string Title, DateTimeOffset StartsAt, DateTimeOffset EndsAt);

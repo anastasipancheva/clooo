@@ -2,7 +2,9 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using ScoreHub.Application.Abstractions;
 using ScoreHub.Domain.Auth;
+using ScoreHub.Domain.Entities;
 using ScoreHub.Domain.Enums;
 using ScoreHub.Infrastructure.Persistence;
 
@@ -15,7 +17,8 @@ namespace ScoreHub.Api.Controllers;
 public sealed class GradebookController : ApiControllerBase
 {
     private readonly ScoreHubDbContext _db;
-    public GradebookController(ScoreHubDbContext db) { _db = db; }
+    private readonly IScoringService _scoring;
+    public GradebookController(ScoreHubDbContext db, IScoringService scoring) { _db = db; _scoring = scoring; }
 
     [HttpGet]
     public async Task<IActionResult> Get(Guid courseId, CancellationToken ct)
@@ -116,10 +119,19 @@ public sealed class GradebookController : ApiControllerBase
         string MarkFor(decimal score) =>
             gradeTable.Where(e => score >= e.Min).OrderByDescending(e => e.Min).FirstOrDefault()?.Mark ?? "2-";
 
+        // Ручные правки ячеек.
+        var overridesAll = await _db.GradeOverrides.AsNoTracking()
+            .Where(o => o.CourseId == courseId)
+            .ToListAsync(ct);
+        var ovByStudent = overridesAll
+            .GroupBy(o => o.StudentId)
+            .ToDictionary(g => g.Key, g => g.ToDictionary(o => o.CellKey, o => o.Value));
+
         var rows = new Dictionary<string, object>();
         foreach (var st in students)
         {
             var sid = st.Id;
+            var ov = ovByStudent.GetValueOrDefault(sid) ?? new Dictionary<string, decimal>();
             decimal weighted = 0, raw = 0;
             var modulesOut = new Dictionary<string, object>();
 
@@ -127,14 +139,15 @@ public sealed class GradebookController : ApiControllerBase
             {
                 var sasRec = sasByStudentModule.GetValueOrDefault((sid, mc.number));
                 decimal moduleScore = sasRec?.ModuleScore ?? 0;
-                decimal homework = sasRec?.HomeworkPoints ?? 0;
-                decimal ktCoef = sasRec?.KtMultiplier ?? 0;
+                decimal homework = sasRec?.HomeworkPoints ?? 0;          // уже override-aware (пересчитано)
+                decimal ktCoef = sasRec?.KtMultiplier ?? 0;              // уже override-aware
                 decimal lecturePointsRaw = sasRec?.LecturePoints ?? 0;
 
-                // КТ-баллы (сумма принятых задач КТ модуля).
+                // КТ-баллы (сумма принятых задач КТ модуля) + ручная правка.
                 decimal ktPoints = 0;
                 if (ktActsByModule.TryGetValue(mc.number, out var ktIds))
                     ktPoints = ktSubs.Where(k => k.StudentId == sid && ktIds.Contains(k.ActivityId)).Sum(k => k.Points);
+                ktPoints = ov.GetValueOrDefault($"ktPoints:{mc.number}", ktPoints);
 
                 var lecturesOut = new Dictionary<string, object>();
                 foreach (var lec in mc.lectures)
@@ -160,10 +173,13 @@ public sealed class GradebookController : ApiControllerBase
                                 pts = sub.Points > 0 ? sub.Points : 1m;
                             }
                         }
+                        // ручная правка балла за задачу
+                        pts = ov.GetValueOrDefault($"task:{lec.id}:{code}", pts);
                         tasksOut[code] = decimal.Round(pts, 2);
                     }
 
                     decimal test = present ? bonusByActStudent.GetValueOrDefault((lec.id, sid), 0) : 0;
+                    test = ov.GetValueOrDefault($"test:{lec.id}", test);
                     decimal lecTotal = tasksOut.Values.Sum() + test;
                     lecturesOut[lec.id.ToString()] = new
                     {
@@ -203,6 +219,65 @@ public sealed class GradebookController : ApiControllerBase
             rows
         });
     }
+
+    /// <summary>Ручная правка значения ячейки. value=null очищает правку (возврат к расчёту).</summary>
+    [HttpPut("cell")]
+    public async Task<IActionResult> SetCell(Guid courseId, [FromBody] CellDto dto, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(dto.CellKey)) return BadRequest(new { error = "Не указана ячейка." });
+
+        var moduleNumber = await ResolveModuleNumber(courseId, dto.CellKey, ct);
+        if (moduleNumber is null) return BadRequest(new { error = "Эту ячейку нельзя редактировать." });
+
+        var existing = await _db.GradeOverrides
+            .FirstOrDefaultAsync(o => o.CourseId == courseId && o.StudentId == dto.StudentId && o.CellKey == dto.CellKey, ct);
+
+        if (dto.Value is null)
+        {
+            if (existing is not null) _db.GradeOverrides.Remove(existing);
+        }
+        else if (existing is null)
+        {
+            _db.GradeOverrides.Add(new GradeOverride
+            {
+                Id = Guid.NewGuid(),
+                CourseId = courseId,
+                StudentId = dto.StudentId,
+                CellKey = dto.CellKey,
+                Value = dto.Value.Value,
+                UpdatedAt = DateTimeOffset.UtcNow
+            });
+        }
+        else
+        {
+            existing.Value = dto.Value.Value;
+            existing.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        await _db.SaveChangesAsync(ct);
+        await _scoring.RecomputeStudentModule(courseId, dto.StudentId, moduleNumber.Value, ct);
+        return Ok();
+    }
+
+    private async Task<int?> ResolveModuleNumber(Guid courseId, string cellKey, CancellationToken ct)
+    {
+        var parts = cellKey.Split(':');
+        if (parts.Length < 2) return null;
+
+        if ((parts[0] == "task" && parts.Length == 3) || (parts[0] == "test" && parts.Length == 2))
+        {
+            if (!Guid.TryParse(parts[1], out var actId)) return null;
+            return await _db.Activities.Where(a => a.Id == actId && a.Module.CourseId == courseId)
+                .Select(a => (int?)a.Module.Number).FirstOrDefaultAsync(ct);
+        }
+
+        if (parts[0] is "homework" or "ktCoef" or "ktPoints" && parts.Length == 2 && int.TryParse(parts[1], out var n))
+            return n;
+
+        return null;
+    }
+
+    public sealed record CellDto(Guid StudentId, string CellKey, decimal? Value);
 
     private sealed record GradeEntry(
         [property: System.Text.Json.Serialization.JsonPropertyName("min")] decimal Min,

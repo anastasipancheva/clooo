@@ -11,6 +11,9 @@ public interface IScoringService
     /// КТ-множитель сохраняется (или 1.0, если КТ ещё не финализирована).</summary>
     Task RecomputeModuleScoresForActivity(Guid activityId, CancellationToken ct = default);
 
+    /// <summary>Пересчитать и сохранить балл одного студента за модуль с учётом ручных правок.</summary>
+    Task RecomputeStudentModule(Guid courseId, Guid studentId, int moduleNumber, CancellationToken ct = default);
+
     Task<OpResult<StudentScoreDto>> GetStudentScore(Guid actorId, Guid courseId, Guid studentId, CancellationToken ct = default);
     Task<OpResult<IReadOnlyList<StudentScoreDto>>> GetCourseScores(Guid actorId, Guid courseId, CancellationToken ct = default);
 }

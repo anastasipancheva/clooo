@@ -94,6 +94,23 @@ public sealed class ScoringService : IScoringService
         await _db.SaveChangesAsync(ct);
     }
 
+    /// <summary>Ручные правки ячеек студента по курсу: CellKey → значение.</summary>
+    private async Task<Dictionary<string, decimal>> LoadOverrides(Guid courseId, Guid studentId, CancellationToken ct) =>
+        await _db.GradeOverrides.AsNoTracking()
+            .Where(o => o.CourseId == courseId && o.StudentId == studentId)
+            .ToDictionaryAsync(o => o.CellKey, o => o.Value, ct);
+
+    /// <summary>Пересчитать и сохранить балл одного студента за модуль с учётом ручных правок.</summary>
+    public async Task RecomputeStudentModule(Guid courseId, Guid studentId, int moduleNumber, CancellationToken ct = default)
+    {
+        var existingMult = await _db.StudentActivityScores
+            .Where(s => s.CourseId == courseId && s.StudentId == studentId && s.ModuleNumber == moduleNumber)
+            .Select(s => (decimal?)s.KtMultiplier)
+            .FirstOrDefaultAsync(ct);
+        await UpsertModuleScore(studentId, courseId, moduleNumber, existingMult is > 0 ? existingMult.Value : 1.0m, ct);
+        await _db.SaveChangesAsync(ct);
+    }
+
     private async Task UpsertModuleScore(Guid studentId, Guid courseId, int moduleNumber, decimal ktMultiplier, CancellationToken ct)
     {
         var record = await _db.StudentActivityScores
@@ -111,20 +128,24 @@ public sealed class ScoringService : IScoringService
             _db.StudentActivityScores.Add(record);
         }
 
-        // Recalculate lecture points from TeamGroupScores
-        var lecturePoints = await ComputeLecturePoints(studentId, courseId, moduleNumber, ct);
-        var hwPoints = await ComputeHomeworkPoints(studentId, courseId, moduleNumber, ct);
+        var overrides = await LoadOverrides(courseId, studentId, ct);
+        // КТ-множитель: ручная правка ktCoef:<module> перекрывает вычисленный.
+        var mult = overrides.GetValueOrDefault($"ktCoef:{moduleNumber}", ktMultiplier);
+
+        var lecturePoints = await ComputeLecturePoints(studentId, courseId, moduleNumber, overrides, ct);
+        var hwPoints = overrides.TryGetValue($"homework:{moduleNumber}", out var hwOv)
+            ? hwOv
+            : await ComputeHomeworkPoints(studentId, courseId, moduleNumber, ct);
 
         record.LecturePoints = lecturePoints;
         record.HomeworkPoints = hwPoints;
-        record.KtMultiplier = ktMultiplier;
-        record.ModuleScore = Math.Round((lecturePoints + hwPoints) * ktMultiplier, 4);
+        record.KtMultiplier = mult;
+        record.ModuleScore = Math.Round((lecturePoints + hwPoints) * mult, 4);
         record.UpdatedAt = DateTimeOffset.UtcNow;
     }
 
-    private async Task<decimal> ComputeLecturePoints(Guid studentId, Guid courseId, int moduleNumber, CancellationToken ct)
+    private async Task<decimal> ComputeLecturePoints(Guid studentId, Guid courseId, int moduleNumber, Dictionary<string, decimal> overrides, CancellationToken ct)
     {
-        // Get all lecture activities in module
         var lectureIds = await _db.Activities
             .Where(a => a.Module.CourseId == courseId
                 && a.Module.Number == moduleNumber
@@ -136,38 +157,53 @@ public sealed class ScoringService : IScoringService
 
         foreach (var actId in lectureIds)
         {
-            // Find team the student was in for this lecture
             var member = await _db.TeamMembers
                 .FirstOrDefaultAsync(m => m.Team.ActivityId == actId && m.UserId == studentId, ct);
+            bool present = member is not null && !member.IsAbsent;
+            var teamId = member?.TeamId;
 
-            if (member is null) continue;
+            // Коды задач занятия.
+            var taskCodes = await _db.TaskItems
+                .Where(t => t.TaskSet.ActivityId == actId)
+                .Select(t => t.Code).Distinct().ToListAsync(ct);
 
-            // Отсутствующим на паре баллы за лекцию не начисляются.
-            if (member.IsAbsent) continue;
+            // Принятые сдачи команды по коду.
+            var acceptedByCode = teamId is null ? new() : (await _db.TaskSubmissions.AsNoTracking()
+                .Where(s => s.ActivityId == actId && s.TeamId == teamId && s.Status == SubmissionStatus.Accepted)
+                .Select(s => new { Code = s.TaskItem.Code, s.DefenderUserId, s.DefenderCoefficient, Points = s.TaskItem.Points })
+                .ToListAsync(ct))
+                .GroupBy(s => s.Code).ToDictionary(g => g.Key, g => g.First());
 
-            // За каждую принятую задачу: базовые баллы = вес задачи (TaskItem.Points).
-            // Защитник получает вес × коэффициент (1.0–1.2), остальные присутствующие — вес задачи.
-            var acceptedSubs = await _db.TaskSubmissions
-                .AsNoTracking()
-                .Where(s => s.ActivityId == actId && s.TeamId == member.TeamId && s.Status == SubmissionStatus.Accepted)
-                .Select(s => new { s.DefenderUserId, s.DefenderCoefficient, Points = s.TaskItem.Points })
-                .ToListAsync(ct);
+            // Коды: все задачи занятия + те, на которые есть ручная правка.
+            var allCodes = taskCodes
+                .Concat(overrides.Keys.Where(k => k.StartsWith($"task:{actId}:")).Select(k => k[$"task:{actId}:".Length..]))
+                .Distinct();
 
             decimal lectureScore = 0;
-            foreach (var s in acceptedSubs)
+            foreach (var code in allCodes)
             {
-                var basePoints = s.Points > 0 ? s.Points : 1.0m;
-                lectureScore += (s.DefenderUserId == studentId) ? basePoints * (s.DefenderCoefficient ?? 1.0m) : basePoints;
+                var key = $"task:{actId}:{code}";
+                if (overrides.TryGetValue(key, out var ov)) { lectureScore += ov; continue; }
+                if (present && acceptedByCode.TryGetValue(code, out var sub))
+                {
+                    var basePoints = sub.Points > 0 ? sub.Points : 1.0m;
+                    lectureScore += (sub.DefenderUserId == studentId) ? basePoints * (sub.DefenderCoefficient ?? 1.0m) : basePoints;
+                }
             }
 
-            // Add mini-test bonus (SQLite не умеет SUM по decimal — суммируем в памяти).
-            var bonuses = await _db.MiniTestAnswers
-                .Where(a => a.ActivityId == actId && a.StudentId == studentId)
-                .Select(a => a.BonusAwarded)
-                .ToListAsync(ct);
-            var bonus = bonuses.Sum();
+            // Тест/бонус (с учётом ручной правки).
+            decimal test;
+            var testKey = $"test:{actId}";
+            if (overrides.TryGetValue(testKey, out var tOv)) test = tOv;
+            else
+            {
+                var bonuses = await _db.MiniTestAnswers
+                    .Where(a => a.ActivityId == actId && a.StudentId == studentId)
+                    .Select(a => a.BonusAwarded).ToListAsync(ct);
+                test = present ? bonuses.Sum() : 0;
+            }
 
-            total += lectureScore + bonus;
+            total += lectureScore + test;
         }
 
         return Math.Round(total, 4);

@@ -38,6 +38,13 @@ export class ApiService {
   courseScores(courseId: string) { return this.get<StudentScore[]>(`/api/courses/${courseId}/scores`); }
   studentScore(courseId: string, studentId: string) { return this.get<StudentScore>(`/api/courses/${courseId}/students/${studentId}/score`); }
   gradebook(courseId: string) { return this.get<{ students: { id: string; name: string }[]; modules: { number: number; lectures: { id: string; title: string; taskCodes: string[] }[]; hasKt: boolean }[]; rows: Record<string, { finalMark: string; weighted: number; raw: number; modules: Record<string, { score: number; homework: number; ktCoef: number; ktPoints: number; lectures: Record<string, { total: number; test: number; coef: number; tasks: Record<string, number> }> }> }> }>(`/api/courses/${courseId}/gradebook`); }
+  setGradeCell(courseId: string, body: { studentId: string; cellKey: string; value: number | null }) {
+    return this.put<void>(`/api/courses/${courseId}/gradebook/cell`, body);
+  }
+  getGrading(courseId: string) { return this.get<{ min: number; mark: string }[]>(`/api/teaching/courses/${courseId}/grading`); }
+  setGrading(courseId: string, table: { min: number; mark: string }[]) {
+    return this.put<void>(`/api/teaching/courses/${courseId}/grading`, { table });
+  }
   courseStudents(courseId: string) {
     return this.get<{ id: string; email: string; displayName: string; role: string; enrolledAt: string }[]>
       (`/api/courses/${courseId}/students`);

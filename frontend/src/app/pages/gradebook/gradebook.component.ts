@@ -2,6 +2,8 @@ import { Component, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/api.service';
+import { AuthService } from '../../core/auth.service';
+import { ToastService } from '../../core/toast.service';
 import { Course } from '../../core/models';
 
 interface LectureCol { id: string; title: string; taskCodes: string[]; }
@@ -30,12 +32,48 @@ interface Col {
     <div class="space-y-4">
       <div class="flex items-center justify-between flex-wrap gap-3">
         <h1 class="text-lg font-semibold text-[#1A1A1B]">Ведомость</h1>
-        <select [class]="'h-9 px-3 pr-8 rounded-lg border border-[#E5E7EB] text-sm outline-none focus:border-[#005BFF]'"
-          [(ngModel)]="courseId" (ngModelChange)="load()">
-          <option value="">— выберите курс —</option>
-          @for (c of courses; track c.id) { <option [value]="c.id">{{ c.code }} — {{ c.title }}</option> }
-        </select>
+        <div class="flex items-center gap-2">
+          @if (courseId && isTeacher) {
+            <button (click)="openGrading()"
+              class="h-9 px-3 rounded-lg border border-[#E5E7EB] text-sm text-[#6B7280] font-medium hover:border-[#005BFF] hover:text-[#005BFF] transition-colors">
+              📊 Границы оценок
+            </button>
+          }
+          <select [class]="'h-9 px-3 pr-8 rounded-lg border border-[#E5E7EB] text-sm outline-none focus:border-[#005BFF]'"
+            [(ngModel)]="courseId" (ngModelChange)="load()">
+            <option value="">— выберите курс —</option>
+            @for (c of courses; track c.id) { <option [value]="c.id">{{ c.code }} — {{ c.title }}</option> }
+          </select>
+        </div>
       </div>
+
+      <!-- Grade boundaries editor -->
+      @if (gradingOpen) {
+        <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" (click)="gradingOpen = false">
+          <div class="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4 max-h-[80vh] overflow-y-auto" (click)="$event.stopPropagation()">
+            <p class="font-semibold text-[#1A1A1B]">📊 Границы баллов для оценок</p>
+            <p class="text-xs text-[#6B7280]">Оценка ставится по БСК: берётся наибольшая граница, которую набрал студент.</p>
+            <div class="space-y-2">
+              @for (r of grading; track $index) {
+                <div class="flex items-center gap-2">
+                  <input [(ngModel)]="r.mark" placeholder="Оценка" class="w-20 h-8 px-2 rounded-lg border border-[#E5E7EB] text-sm outline-none focus:border-[#005BFF]" />
+                  <span class="text-xs text-[#9CA3AF]">от</span>
+                  <input type="number" step="1" [(ngModel)]="r.min" placeholder="баллов" class="w-24 h-8 px-2 rounded-lg border border-[#E5E7EB] text-sm outline-none focus:border-[#005BFF]" />
+                  <button (click)="removeGradeRow($index)" class="text-[#EF4444] text-xs hover:underline">✕</button>
+                </div>
+              }
+            </div>
+            <button (click)="addGradeRow()" class="text-xs text-[#005BFF] hover:underline">+ строка</button>
+            <div class="flex gap-2 pt-1">
+              <button (click)="gradingOpen = false" class="flex-1 h-9 rounded-lg border border-[#E5E7EB] text-sm text-[#6B7280] hover:border-[#005BFF] transition-colors">Отмена</button>
+              <button (click)="saveGrading()" [disabled]="gradingSaving"
+                class="flex-1 h-9 rounded-lg bg-[#005BFF] text-white text-sm font-medium hover:bg-[#0050E6] disabled:opacity-60 transition-colors">
+                {{ gradingSaving ? '⏳...' : 'Сохранить' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      }
 
       @if (loading) { <p class="text-sm text-[#6B7280] animate-pulse">Загрузка...</p> }
 
@@ -59,7 +97,15 @@ interface Col {
                 @for (st of data.students; track st.id) {
                   <tr class="hover:bg-[#FAFBFF]">
                     @for (col of columns; track col.id) {
-                      <td [class]="tdClass(col)">{{ cell(col, st.id) }}</td>
+                      <td [class]="tdClass(col)" (click)="startEdit(col, st.id)">
+                        @if (editing === st.id + '|' + col.id) {
+                          <input [(ngModel)]="editVal" (click)="$event.stopPropagation()"
+                            (keyup.enter)="saveEdit(col, st.id)" (keyup.escape)="cancelEdit()" (blur)="saveEdit(col, st.id)"
+                            class="w-14 h-6 px-1 rounded border border-[#005BFF] text-xs outline-none" autofocus />
+                        } @else {
+                          {{ cell(col, st.id) }}
+                        }
+                      </td>
                     }
                   </tr>
                 }
@@ -73,6 +119,8 @@ interface Col {
 })
 export class GradebookComponent implements OnInit {
   private api = inject(ApiService);
+  private auth = inject(AuthService);
+  private toast = inject(ToastService);
 
   courses: Course[] = [];
   courseId = '';
@@ -80,6 +128,68 @@ export class GradebookComponent implements OnInit {
   loading = false;
   expModules = new Set<number>();
   expLectures = new Set<string>();
+
+  editing: string | null = null;   // sid|colId
+  editVal = '';
+  savingCell = false;
+
+  // Границы оценок
+  gradingOpen = false;
+  grading: { min: number; mark: string }[] = [];
+  gradingSaving = false;
+
+  get isTeacher() { return this.auth.isTeacher(); }
+
+  // Ключ ячейки для ручной правки (null — нередактируемая колонка).
+  cellKey(col: Col): string | null {
+    if (col.field === 'task' && col.lecId && col.taskCode) return `task:${col.lecId}:${col.taskCode}`;
+    if (col.field === 'lecTest' && col.lecId) return `test:${col.lecId}`;
+    if (col.field === 'homework' && col.moduleNum != null) return `homework:${col.moduleNum}`;
+    if (col.field === 'ktCoef' && col.moduleNum != null) return `ktCoef:${col.moduleNum}`;
+    if (col.field === 'ktPoints' && col.moduleNum != null) return `ktPoints:${col.moduleNum}`;
+    return null;
+  }
+  isEditable(col: Col) { return this.cellKey(col) !== null; }
+
+  startEdit(col: Col, sid: string) {
+    if (!this.isEditable(col) || col.toggle) return;
+    this.editing = sid + '|' + col.id;
+    this.editVal = this.cell(col, sid);
+  }
+  cancelEdit() { this.editing = null; }
+
+  async saveEdit(col: Col, sid: string) {
+    const key = this.cellKey(col);
+    if (!key) { this.editing = null; return; }
+    const trimmed = this.editVal.trim();
+    const value = trimmed === '' ? null : Number(trimmed.replace(',', '.'));
+    if (value !== null && isNaN(value)) { this.toast.error('Введите число'); return; }
+    this.savingCell = true;
+    try {
+      await this.api.setGradeCell(this.courseId, { studentId: sid, cellKey: key, value });
+      this.editing = null;
+      await this.load();
+    } catch (e: unknown) { this.toast.error(e instanceof Error ? e.message : 'Ошибка'); }
+    finally { this.savingCell = false; }
+  }
+
+  async openGrading() {
+    try { this.grading = await this.api.getGrading(this.courseId); }
+    catch { this.grading = []; }
+    this.gradingOpen = true;
+  }
+  addGradeRow() { this.grading = [...this.grading, { min: 0, mark: '' }]; }
+  removeGradeRow(i: number) { this.grading = this.grading.filter((_, idx) => idx !== i); }
+  async saveGrading() {
+    this.gradingSaving = true;
+    try {
+      await this.api.setGrading(this.courseId, this.grading.map(r => ({ min: Number(r.min) || 0, mark: r.mark })));
+      this.gradingOpen = false;
+      this.toast.success('Границы оценок сохранены');
+      await this.load();
+    } catch (e: unknown) { this.toast.error(e instanceof Error ? e.message : 'Ошибка'); }
+    finally { this.gradingSaving = false; }
+  }
 
   async ngOnInit() {
     this.courses = await this.api.listCourses().catch(() => [] as Course[]);
@@ -178,6 +288,7 @@ export class GradebookComponent implements OnInit {
     else if (col.field === 'mark') c += ' font-semibold';
     else if (col.field === 'weighted' || col.field === 'moduleScore') c += ' text-[#005BFF] font-medium';
     else c += ' text-[#6B7280]';
+    if (this.isEditable(col)) c += ' cursor-pointer hover:bg-[#EAF2FF]';
     return c;
   }
 }
