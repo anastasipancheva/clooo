@@ -37,6 +37,7 @@ export class ApiService {
   listCourses() { return this.get<Course[]>('/api/courses'); }
   courseScores(courseId: string) { return this.get<StudentScore[]>(`/api/courses/${courseId}/scores`); }
   studentScore(courseId: string, studentId: string) { return this.get<StudentScore>(`/api/courses/${courseId}/students/${studentId}/score`); }
+  gradebook(courseId: string) { return this.get<{ students: { id: string; name: string }[]; modules: { number: number; lectures: { id: string; title: string; taskCodes: string[] }[]; hasKt: boolean }[]; rows: Record<string, { finalMark: string; weighted: number; raw: number; modules: Record<string, { score: number; homework: number; ktCoef: number; ktPoints: number; lectures: Record<string, { total: number; test: number; coef: number; tasks: Record<string, number> }> }> }> }>(`/api/courses/${courseId}/gradebook`); }
   courseStudents(courseId: string) {
     return this.get<{ id: string; email: string; displayName: string; role: string; enrolledAt: string }[]>
       (`/api/courses/${courseId}/students`);

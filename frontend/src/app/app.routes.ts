@@ -43,6 +43,10 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/calendar/calendar.component').then(m => m.CalendarComponent),
       },
       {
+        path: 'gradebook',
+        loadComponent: () => import('./pages/gradebook/gradebook.component').then(m => m.GradebookComponent),
+      },
+      {
         path: 'notifications',
         loadComponent: () => import('./pages/notifications/notifications.component').then(m => m.NotificationsComponent),
       },
