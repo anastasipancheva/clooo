@@ -13,7 +13,7 @@ namespace ScoreHub.Api.Controllers;
 /// <summary>Иерархическая ведомость курса: модуль → лекция → задача, с итоговыми колонками.</summary>
 [ApiController]
 [Route("api/courses/{courseId:guid}/gradebook")]
-[Authorize(Roles = $"{AppRoles.Assistant},{AppRoles.Teacher},{AppRoles.Admin}")]
+[Authorize]
 public sealed class GradebookController : ApiControllerBase
 {
     private readonly ScoreHubDbContext _db;
@@ -35,6 +35,17 @@ public sealed class GradebookController : ApiControllerBase
             .ToListAsync(ct))
             .OrderBy(s => s.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ToList();
+
+        // Студент видит ведомость только по себе (read-only). Персонал — всех.
+        var isStaff = User.IsInRole(AppRoles.Assistant) || User.IsInRole(AppRoles.Teacher) || User.IsInRole(AppRoles.Admin);
+        if (!isStaff)
+        {
+            var me = CurrentUserId;
+            if (me is null) return Unauthorized();
+            if (!students.Any(s => s.Id == me.Value)) return Forbid();
+            students = students.Where(s => s.Id == me.Value).ToList();
+        }
+
         var studentIds = students.Select(s => s.Id).ToHashSet();
 
         // Структура курса.
@@ -222,6 +233,7 @@ public sealed class GradebookController : ApiControllerBase
 
     /// <summary>Ручная правка значения ячейки. value=null очищает правку (возврат к расчёту).</summary>
     [HttpPut("cell")]
+    [Authorize(Roles = $"{AppRoles.Assistant},{AppRoles.Teacher},{AppRoles.Admin}")]
     public async Task<IActionResult> SetCell(Guid courseId, [FromBody] CellDto dto, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(dto.CellKey)) return BadRequest(new { error = "Не указана ячейка." });

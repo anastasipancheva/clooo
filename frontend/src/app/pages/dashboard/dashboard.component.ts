@@ -103,7 +103,7 @@ import { activityTypeIcon, activityTypeIconBg } from '../../core/activity-type';
       <!-- Quick links -->
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
         @if (!auth.isAssistant()) {
-          <a routerLink="/scores" class="bg-white rounded-xl border border-[#E5E7EB] p-4 hover:border-[#005BFF]/30 hover:shadow-sm transition-all block text-center">
+          <a routerLink="/gradebook" class="bg-white rounded-xl border border-[#E5E7EB] p-4 hover:border-[#005BFF]/30 hover:shadow-sm transition-all block text-center">
             <div class="w-9 h-9 rounded-xl bg-[#FEF3C7] flex items-center justify-center mb-2 mx-auto text-lg">⭐</div>
             <p class="text-xs font-semibold text-[#1A1A1B]">Баллы</p>
           </a>

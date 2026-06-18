@@ -31,7 +31,7 @@ interface Col {
   template: `
     <div class="space-y-4">
       <div class="flex items-center justify-between flex-wrap gap-3">
-        <h1 class="text-lg font-semibold text-[#1A1A1B]">Ведомость</h1>
+        <h1 class="text-lg font-semibold text-[#1A1A1B]">Баллы</h1>
         <div class="flex items-center gap-2">
           @if (courseId && isTeacher) {
             <button (click)="openGrading()"
@@ -139,6 +139,8 @@ export class GradebookComponent implements OnInit {
   gradingSaving = false;
 
   get isTeacher() { return this.auth.isTeacher(); }
+  // Редактировать ячейки могут только ассистент/преподаватель; студент — только просмотр.
+  get canEdit() { return this.auth.isAssistant() || this.auth.isTeacher(); }
 
   // Ключ ячейки для ручной правки (null — нередактируемая колонка).
   cellKey(col: Col): string | null {
@@ -149,7 +151,7 @@ export class GradebookComponent implements OnInit {
     if (col.field === 'ktPoints' && col.moduleNum != null) return `ktPoints:${col.moduleNum}`;
     return null;
   }
-  isEditable(col: Col) { return this.cellKey(col) !== null; }
+  isEditable(col: Col) { return this.canEdit && this.cellKey(col) !== null; }
 
   startEdit(col: Col, sid: string) {
     if (!this.isEditable(col) || col.toggle) return;
@@ -192,7 +194,10 @@ export class GradebookComponent implements OnInit {
   }
 
   async ngOnInit() {
-    this.courses = await this.api.listCourses().catch(() => [] as Course[]);
+    const all = await this.api.listCourses().catch(() => [] as Course[]);
+    // Студент видит только курсы, на которые записан.
+    this.courses = this.canEdit ? all : all.filter(c => c.isEnrolled);
+    if (this.courses.length === 1) { this.courseId = this.courses[0].id; await this.load(); }
   }
 
   async load() {

@@ -1173,7 +1173,6 @@ export class AdminComponent implements OnInit {
     { key: 'structure', label: 'Структура' },
     { key: 'materials', label: 'Задания' },
     { key: 'students', label: 'Студенты/Персонал' },
-    { key: 'scores', label: 'Баллы' },
     { key: 'schedule', label: 'Расписание' },
     { key: 'teams', label: 'Команды' },
     { key: 'templates', label: '📋 Шаблоны' },
