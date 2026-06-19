@@ -90,3 +90,4 @@
 [2026-06-17 14:40:00] frontend: role-based navigation in shell
 [2026-06-17 16:25:00] frontend: error handling - 401/403 redirects
 [2026-06-19 10:00:00] chore: Dockerfile and railpack config for deploy
+[2026-06-19 12:15:00] fix: migration snapshot regenerated
