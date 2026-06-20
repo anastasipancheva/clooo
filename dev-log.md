@@ -95,3 +95,4 @@
 [2026-06-19 16:35:00] frontend: final UI polish - colors and spacing
 [2026-06-20 10:10:00] release: v1.0 - ScoreHub ready for demo
 [2026-06-20 12:00:00] release: backend smoke-tested on Railway
+[2026-06-20 13:30:00] release: frontend build passes, prod verified
