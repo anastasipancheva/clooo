@@ -709,7 +709,37 @@ public sealed class TeachingController : ApiControllerBase
 
         int teamSize = Math.Max(2, dto.TeamSize);
         var rnd = new Random();
-        var shuffled = students.OrderBy(_ => rnd.Next()).ToList();
+
+        // Алгоритм формирования (по описанию преподавателя):
+        //  1) первая пара (баллов ещё нет) — святой рандом;
+        //  2) до КТ1 — балансируем по сырым баллам (СБ), чтобы средние по командам были близки;
+        //  3) после КТ1 — балансируем по итоговым баллам (с КТ-множителем).
+        // Балансировка достигается «змейкой» по студентам, отсортированным по убыванию балла.
+        var scoreRows = await _db.StudentActivityScores.AsNoTracking()
+            .Where(s => s.CourseId == courseId)
+            .Select(s => new { s.StudentId, Raw = s.LecturePoints + s.HomeworkPoints, Final = s.ModuleScore })
+            .ToListAsync(ct);
+        bool anyScores = scoreRows.Count > 0;
+        bool ktDone = await _db.TaskSubmissions.AnyAsync(s => s.Status == ScoreHub.Domain.Enums.SubmissionStatus.Accepted
+            && s.StudentId != null && s.Activity.Type == ActivityType.ControlPoint && s.Activity.Module.CourseId == courseId, ct);
+
+        var rawByStudent = scoreRows.GroupBy(s => s.StudentId).ToDictionary(g => g.Key, g => g.Sum(x => x.Raw));
+        var finalByStudent = scoreRows.GroupBy(s => s.StudentId).ToDictionary(g => g.Key, g => g.Sum(x => x.Final));
+
+        List<Domain.Entities.User> shuffled;
+        if (!anyScores)
+        {
+            shuffled = students.OrderBy(_ => rnd.Next()).ToList();
+        }
+        else
+        {
+            var scoreOf = ktDone ? finalByStudent : rawByStudent;
+            // сортируем по баллу (убыв.), внутри равных — случайно, для разнообразия
+            shuffled = students
+                .OrderByDescending(u => scoreOf.GetValueOrDefault(u.Id, 0m))
+                .ThenBy(_ => rnd.Next())
+                .ToList();
+        }
 
         int teamCount = (int)Math.Ceiling((double)shuffled.Count / teamSize);
         var teams = new Team[teamCount];

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using ScoreHub.Application.Abstractions;
 using ScoreHub.Domain.Auth;
 using ScoreHub.Domain.Entities;
 using ScoreHub.Infrastructure.Persistence;
@@ -13,7 +14,8 @@ namespace ScoreHub.Api.Controllers;
 public sealed class AssistantApplicationController : ApiControllerBase
 {
     private readonly ScoreHubDbContext _db;
-    public AssistantApplicationController(ScoreHubDbContext db) { _db = db; }
+    private readonly INotificationService _notify;
+    public AssistantApplicationController(ScoreHubDbContext db, INotificationService notify) { _db = db; _notify = notify; }
 
     /// <summary>Преподаватель просматривает все заявки на занятие.</summary>
     [HttpGet]
@@ -193,6 +195,15 @@ public sealed class AssistantApplicationController : ApiControllerBase
 
         // D4 — пропорционально перераспределяем команды между актуальным составом ассистентов.
         await RebalanceTeamAssistantsAsync(activityId, ct);
+
+        // Уведомляем ассистента о решении.
+        var activityTitle = await _db.Activities.Where(a => a.Id == activityId).Select(a => a.Title).FirstOrDefaultAsync(ct);
+        await _notify.NotifyManyAsync(
+            new[] { app.AssistantId },
+            dto.Approved ? "AssistantApproved" : "AssistantRejected",
+            dto.Approved ? $"Ваша заявка ассистентом одобрена: {activityTitle}" : $"Ваша заявка ассистентом отклонена: {activityTitle}",
+            null,
+            ct);
         return Ok();
     }
 

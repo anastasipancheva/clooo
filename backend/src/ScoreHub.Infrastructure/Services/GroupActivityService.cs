@@ -162,6 +162,12 @@ public sealed class GroupActivityService : IGroupActivityService
         if (sub is { Status: SubmissionStatus.Accepted })
             return OpResult<Unit>.Fail("Задача уже принята.");
 
+        if (sub is { Status: SubmissionStatus.InReview })
+            return OpResult<Unit>.Fail("Задача уже на проверке.");
+
+        // Система сама выбирает защитника: приоритет тем, кто ещё не защищал в этом занятии.
+        var defenderId = await PickDefenderAsync(team, taskItemId, actorId, ct);
+
         if (sub is null)
         {
             sub = new TaskSubmission
@@ -173,20 +179,16 @@ public sealed class GroupActivityService : IGroupActivityService
                 CreatedAt = DateTimeOffset.UtcNow,
                 Status = SubmissionStatus.ReadyForReview,
                 ReadyAt = DateTimeOffset.UtcNow,
-                // Тот, кто отметил задачу готовой, и будет её защищать.
-                DefenderUserId = actorId
+                DefenderUserId = defenderId
             };
             _db.TaskSubmissions.Add(sub);
         }
         else
         {
-            if (sub.Status == SubmissionStatus.InReview)
-                return OpResult<Unit>.Fail("Задача уже на проверке.");
-
             sub.Status = SubmissionStatus.ReadyForReview;
             sub.ReadyAt = DateTimeOffset.UtcNow;
             sub.ReviewerId = null;
-            sub.DefenderUserId = actorId;
+            sub.DefenderUserId = defenderId;
             sub.ReviewedAt = null;
             sub.Result01 = null;
             sub.DefenderCoefficient = null;
@@ -194,12 +196,11 @@ public sealed class GroupActivityService : IGroupActivityService
 
         await _db.SaveChangesAsync(ct);
 
-        // О готовности сдать задачу уведомляются только ассистенты команды (не студенты).
+        // О готовности сдать задачу уведомляются ассистенты команды.
         var assistantIds = await _db.TeamAssistants
             .Where(x => x.TeamId == teamId)
             .Select(x => x.AssistantId)
             .ToListAsync(ct);
-
         await _notify.NotifyManyAsync(
             assistantIds.Distinct().ToList(),
             "TeamReadyToDefend",
@@ -207,7 +208,37 @@ public sealed class GroupActivityService : IGroupActivityService
             null,
             ct);
 
+        // Выбранный защитник получает персональное уведомление.
+        await _notify.NotifyManyAsync(
+            new[] { defenderId },
+            "YouAreDefender",
+            $"Вы защищаете задачу {task.Code} от команды «{team.Name}»",
+            "Подойдите к ассистенту для сдачи.",
+            ct);
+
         return OpResult<Unit>.Ok(Unit.Value);
+    }
+
+    /// <summary>Случайно выбирает защитника команды: приоритет присутствующим, кто ещё не защищал
+    /// (минимальное число защит) в этом занятии. Когда у всех поровну — выбор случайный.</summary>
+    private async Task<Guid> PickDefenderAsync(Team team, Guid currentTaskItemId, Guid actorId, CancellationToken ct)
+    {
+        var present = team.Members.Where(m => !m.IsAbsent).Select(m => m.UserId).ToList();
+        if (present.Count == 0) return actorId; // запасной вариант
+
+        // Число защит каждого в этом занятии (кроме текущей задачи, без отклонённых).
+        var defenders = await _db.TaskSubmissions
+            .Where(s => s.ActivityId == team.ActivityId && s.TeamId == team.Id
+                && s.TaskItemId != currentTaskItemId
+                && s.DefenderUserId != null
+                && s.Status != SubmissionStatus.Rejected)
+            .Select(s => s.DefenderUserId!.Value)
+            .ToListAsync(ct);
+        var counts = defenders.GroupBy(x => x).ToDictionary(g => g.Key, g => g.Count());
+
+        var minCount = present.Min(u => counts.GetValueOrDefault(u, 0));
+        var candidates = present.Where(u => counts.GetValueOrDefault(u, 0) == minCount).ToList();
+        return candidates[Random.Shared.Next(candidates.Count)];
     }
 
     public async Task<OpResult<IReadOnlyList<HelpRequestRow>>> ListOpenHelpRequests(Guid actorId, Guid activityId, CancellationToken ct = default)

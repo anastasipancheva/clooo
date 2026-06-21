@@ -6,6 +6,7 @@ import { Subscription } from 'rxjs';
 import { AuthService } from '../core/auth.service';
 import { SignalRService } from '../core/signalr.service';
 import { ToastService } from '../core/toast.service';
+import { ApiService } from '../core/api.service';
 
 @Component({
   selector: 'app-shell',
@@ -66,6 +67,7 @@ export class ShellComponent implements OnInit, OnDestroy {
   private signalR = inject(SignalRService);
   private toast = inject(ToastService);
   private router = inject(Router);
+  private api = inject(ApiService);
   private sub?: Subscription;
 
   unread = signal(0);
@@ -89,10 +91,15 @@ export class ShellComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit() {
+    // Начальный счётчик непрочитанных уведомлений, чтобы бейдж был виден сразу.
+    this.api.listNotifications()
+      .then(list => this.unread.set(list.filter(n => !n.readAt).length))
+      .catch(() => {});
+
     this.signalR.start();
     this.sub = this.signalR.notification$.subscribe(payload => {
       this.unread.update(n => n + 1);
-      this.toast.info(payload.title, payload.body);
+      this.toast.notify(payload.title, payload.body);
     });
   }
 

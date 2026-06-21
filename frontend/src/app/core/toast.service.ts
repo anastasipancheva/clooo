@@ -15,8 +15,10 @@ export class ToastService {
   }
 
   success(msg: string, desc?: string) { this.add('success', msg, desc); }
-  error(msg: string, desc?: string) { this.add('error', msg, desc); }
+  error(msg: string, desc?: string) { this.add('error', msg, desc, 6000); }
   info(msg: string, desc?: string) { this.add('info', msg, desc); }
   warning(msg: string, desc?: string) { this.add('warning', msg, desc); }
+  // Уведомления держим на экране дольше, чтобы их точно заметили.
+  notify(msg: string, desc?: string) { this.add('info', msg, desc, 9000); }
   remove(id: number) { this.toasts.update(list => list.filter(t => t.id !== id)); }
 }
